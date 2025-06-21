@@ -6,6 +6,20 @@ secrets.h
 *.credentials
 *.env.local
 
+# ===== PYTHON =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
 # ===== PLATFORMIO =====
 .pio/
 .vscode/
