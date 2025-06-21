@@ -41,25 +41,12 @@ bool isAnchorIDValid(int id) {
 // ===== MEJORA 12: FILTROS ANTI-FANTASMAS =====
 #if ENABLE_RANGE_FILTER
 bool isSignalValid() {
-  // Verificar RSSI
-  float rssi = DW3000.getRSSI();
-  if (rssi < MIN_RSSI_THRESHOLD) {
-    DEBUG_PRINT("[FILTER] RSSI débil: ");
-    DEBUG_PRINTLN(rssi);
-    return false;
-  }
+  // NOTA: DW3000.getRSSI() no está disponible en librería Makerfabs
+  // Implementar filtro básico basado en otros parámetros si es necesario
   
-  // Verificar rango estimado basado en potencia de señal
-  // Aproximación simple: distancia correlaciona con RSSI
-  float estimatedRange = abs(rssi + 30) * 2.0; // Fórmula simplificada
-  
-  if (estimatedRange > MAX_RANGE_THRESHOLD_M || estimatedRange < MIN_RANGE_THRESHOLD_M) {
-    DEBUG_PRINT("[FILTER] Rango anómalo estimado: ");
-    DEBUG_PRINT(estimatedRange);
-    DEBUG_PRINTLN("m");
-    return false;
-  }
-  
+  // Por ahora, aceptar todas las señales (filtro deshabilitado)
+  // En futuras versiones se puede implementar filtrado basado en 
+  // parámetros disponibles en la librería Makerfabs
   return true;
 }
 #endif
@@ -72,6 +59,9 @@ enum class Stage {
   SendFinal = 3,  // Enviar información final
   Cleanup = 4     // Estado de limpieza
 };
+
+// Declaración forward para función auxiliar
+const char* getStateString(Stage state);
 
 // ===== VARIABLES DE ESTADO OPTIMIZADAS =====
 static int rx_status;
