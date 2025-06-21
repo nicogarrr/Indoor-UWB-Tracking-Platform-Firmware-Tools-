@@ -1,8 +1,9 @@
 # 🏟️ Sistema de Localización Indoor UWB para Fútbol Sala
 
-**TFG 2024 - Trabajo de Fin de Grado**  
-**Autor:** Nicolás García  
-**Universidad:** [Tu Universidad]  
+**TFG 2024-2025 - Trabajo de Fin de Grado**  
+**Autor:** Nicolás Iglesias García  
+**Universidad:** Universidad de Oviedo - EPI Gijón  
+**Grado:** Ciencia e Ingeniería de Datos  
 **Versión:** v1.0
 
 ## 📋 Descripción del Proyecto
@@ -638,10 +639,11 @@ done
 Este es un **Trabajo de Fin de Grado** en desarrollo activo.
 
 ## **Información del Proyecto:**
-- **Autor:** Nicolás García
+- **Autor:** Nicolás Iglesias García
 - **GitHub:** [@nicogarrr](https://github.com/nicogarrr)
-- **Universidad:** [Tu Universidad]
-- **Año académico:** 2024
+- **Universidad:** Universidad de Oviedo - EPI Gijón
+- **Grado:** Ciencia e Ingeniería de Datos
+- **Año académico:** 2024-2025
 
 ## **Estado Actual:**
 - 🟢 **Diseño del sistema** - Completado
@@ -671,9 +673,9 @@ Este proyecto está desarrollado para fines académicos y de investigación.
 
 ## **Agradecimientos**
 - **Tutor TFG:** [Nombre del tutor]
-- **Universidad:** [Tu Universidad]
-- **Departamento:** [Tu Departamento]
-- **Área:** Sistemas de Telecomunicaciones
+- **Universidad:** Universidad de Oviedo - EPI Gijón
+- **Grado:** Ciencia e Ingeniería de Datos
+- **Área:** Sistemas de Telecomunicaciones e Ingeniería de Datos
 
 ---
 
