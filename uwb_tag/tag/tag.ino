@@ -7,7 +7,7 @@
 #include <ArduinoJson.h>
 #include <esp_task_wdt.h> // MEJORA TFG: Watchdog para robustez
 #include <math.h> // TFG v2.1-FINAL: Dependencias matemáticas explícitas (isnan, isinf, sqrt)
-#include "../common/config.h" // TFG v2.1: Configuración centralizada
+#include "../../common/config.h" // TFG v2.1: Configuración centralizada
 
 // TFG v2.1-FINAL: Constante para escalado visual consistente
 // NOTA: PIXELS_PER_M ahora se define en config.h para evitar duplicación
@@ -64,11 +64,10 @@ PubSubClient client(espClient);
 // NOTA: Las constantes principales están definidas en config.h
 
 // ===== TDMA Configuration OPTIMIZADA =====
-constexpr unsigned long TDMA_CYCLE_MS = 500;   // Reducido de 1000ms a 500ms para mayor frecuencia
-constexpr unsigned long TDMA_SLOT_DURATION_MS = 100; // Reducido de 500ms a 100ms por tag
+// NOTA: Configuraciones ahora definidas en config.h para evitar duplicación
 
 // ===== CONFIGURACIÓN DE RANGING OPTIMIZADA =====
-constexpr int ROUND_DELAY = 50;  // Reducido de 100 a 50
+// NOTA: ROUND_DELAY ahora definido en config.h
 static int rx_status;
 // TFG v2.1-PRODUCTION: frame_buffer y tx_status eliminados (no utilizados)
 
@@ -86,7 +85,7 @@ static int ranging_time = 0;
 static float distance = 0;
 
 // Configuraciones para mediciones y filtrado MEJORADAS
-int ID_PONG[NUM_ANCHORS] = {10, 20, 30, 40, 50};
+// NOTA: ANCHOR_IDS ahora definido en config.h
 float anchor_distance[NUM_ANCHORS] = {0};
 float pot_sig[NUM_ANCHORS] = {0};
 // TFG v2.1-PRODUCTION: distance_buffer, anchor_avg, buffer_index y NUM_MEASUREMENTS eliminados (no utilizados)
@@ -101,7 +100,7 @@ unsigned long last_measurement_time[NUM_ANCHORS] = {0};
 // Variables para timeout OPTIMIZADAS
 unsigned long timeoutStart = 0;
 bool waitingForResponse = false;
-constexpr unsigned long RESPONSE_TIMEOUT = 100; // Reducido de 200ms a 100ms para fútbol sala
+// NOTA: RESPONSE_TIMEOUT ahora definido en config.h
 
 // TFG v2.1-FINAL: State machine para reset DW3000 no bloqueante
 enum ResetState { RESET_IDLE, RESET_REQUESTED, RESET_IN_PROGRESS };
@@ -116,8 +115,8 @@ unsigned long updateInterval = 25;  // Reducido de 50ms a 25ms para 40Hz
 
 // Variables para modo de bajo consumo
 unsigned long lastActivityTime = 0;
-const unsigned long SLEEP_TIMEOUT = 300000;
 bool lowPowerMode = false;
+// NOTA: SLEEP_TIMEOUT ahora definido en config.h
 
 // Variables para Filtro de Kalman ADAPTATIVO MEJORADO
 float kalman_dist[NUM_ANCHORS][2] = { {0} };
@@ -207,9 +206,16 @@ struct PerformanceMetrics {
   unsigned long rangingStartTime = 0;
   unsigned long mqttPublishTime = 0;
   unsigned long mqttPublishFailures = 0; // MEJORA TFG: Contar fallos MQTT
-} performanceMetrics;
+  unsigned long mqttPublishSuccess = 0;   // MEJORA TFG: Contar éxitos MQTT
+  unsigned long totalNetworkErrors = 0;   // MEJORA TFG: Errores de red
+  float maxLatency = 0.0;                 // MEJORA TFG: Latencia máxima observada
+  float minLatency = 999999.0;            // MEJORA TFG: Latencia mínima observada
+  unsigned long lastPerformanceReset = 0; // MEJORA TFG: Última vez que se resetearon métricas
+};
 
-const unsigned long METRICS_REPORT_INTERVAL = 30000; // Reportar métricas cada 30 segundos
+PerformanceMetrics performanceMetrics;
+
+// NOTA: METRICS_REPORT_INTERVAL ahora definido en config.h
 
 #if ENABLE_WEB_INTERFACE
 // HTML para la página web integrada (solo si está habilitada)
@@ -721,42 +727,29 @@ void requestDW3000Reset() {
 
 // TFG v2.1-FINAL: State machine no bloqueante para reset DW3000
 void executePendingReset() {
-  static uint8_t softResets = 0;
-  
   switch (resetState) {
-    case RESET_IDLE:
-      return; // Nada que hacer
-      
     case RESET_REQUESTED:
-      // Iniciar reset (sin delay bloqueante)
-      if (++softResets > 10) {
-        Serial.println(F("[INFO] 10+ soft resets → Ejecutando HARD RESET"));
-        DW3000.hardReset();
-        softResets = 0;
-        resetStartTime = millis();
-        resetState = RESET_IN_PROGRESS;
-      } else {
-        DW3000.softReset();
-        resetStartTime = millis();
-        resetState = RESET_IN_PROGRESS;
-      }
+      DEBUG_PRINTLN(F("[RESET] Iniciando reset DW3000..."));
+      DW3000.begin();
+      DW3000.hardReset();
+      resetStartTime = millis();
+      resetState = RESET_IN_PROGRESS;
       break;
-      
+
     case RESET_IN_PROGRESS:
-      // Esperar tiempo necesario (no bloqueante)
-      if (millis() - resetStartTime >= 200) { // 200ms suficiente para ambos resets
-        // TFG v2.1-FINAL: Verificar retorno de DW3000.init() también en reset state machine
-        if (!DW3000.init()) {
-          Serial.println(F("[CRITICAL] DW3000.init() falló en reset - Reiniciando ESP32..."));
-          delay(1000);
-          ESP.restart();
-        }
+      if (millis() - resetStartTime >= 200) {
+        DW3000.init(); // TFG v2.1-FINAL: DW3000.init() no retorna bool en esta librería
+        DEBUG_PRINTLN(F("[RESET] DW3000 reset completado"));
+        DW3000.setupGPIO();
         DW3000.configureAsTX();
         DW3000.clearSystemStatus();
-        esp_task_wdt_reset(); // Reset watchdog tras delay prolongado
-        Serial.println(F("[INFO] DW3000 reinicializado (state machine)"));
         resetState = RESET_IDLE;
       }
+      break;
+
+    case RESET_IDLE:
+    default:
+      // No hacer nada
       break;
   }
 }
@@ -855,7 +848,7 @@ String getDataJson() {
   JsonArray anchorsArray = jsonDoc.createNestedArray("anchors");
   for (int i = 0; i < NUM_ANCHORS; i++) {
     JsonObject anchorObject = anchorsArray.createNestedObject();
-    anchorObject["id"] = ID_PONG[i];
+    anchorObject["id"] = ANCHOR_IDS[i];
     // Asegurarse de enviar valores válidos (evitar NaN o Inf)
     anchorObject["dist"] = isnan(anchor_distance[i]) || isinf(anchor_distance[i]) ? 0.0 : anchor_distance[i]; // Distancia en cm
     anchorObject["rssi"] = isnan(pot_sig[i]) || isinf(pot_sig[i]) ? -100.0 : pot_sig[i];       // Potencia de señal
@@ -1244,9 +1237,14 @@ void setup() {
   
   setupWebServer();
   
-  // MEJORA TFG: Configurar watchdog para robustez del sistema
-  esp_task_wdt_init(7, true); // TFG v2.1-FINAL: 7s para WiFi lag + lowPowerMode
-  esp_task_wdt_add(NULL);     // Añadir tarea actual al watchdog
+  // MEJORA TFG: Configurar watchdog para robustez del sistema (API actualizada ESP32)
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms = 7000,    // 7 segundos para WiFi lag + lowPowerMode
+    .idle_core_mask = 0,   // No monitorear idle tasks
+    .trigger_panic = true  // Hacer panic si timeout
+  };
+  esp_task_wdt_init(&wdt_config); // TFG v2.1-FINAL: API actualizada
+  esp_task_wdt_add(NULL);         // Añadir tarea actual al watchdog
               DEBUG_PRINTLN("Watchdog configurado: 7s timeout");
   
   // Setup MQTT
@@ -1273,12 +1271,8 @@ void setup() {
     delay(100);
   }
 
-  // TFG v2.1-FINAL: Verificar retorno de DW3000.init() para robustez crítica
-  if (!DW3000.init()) {
-    Serial.println(F("[CRITICAL] DW3000.init() falló - Reiniciando ESP32..."));
-    delay(1000);
-    ESP.restart();
-  }
+  // TFG v2.1-FINAL: DW3000.init() no retorna bool en esta librería
+  DW3000.init(); // Simplificado - no verificar retorno
   DW3000.setupGPIO();
   Serial.println(F("[INFO] DW3000 inicializado correctamente."));
 
@@ -1356,13 +1350,13 @@ void loop() {
               kalman_dist[ii][0] = 0;         // Reset estado
               kalman_dist[ii][1] = kalman_dist_r; // TFG v2.1-FINAL: Arranque suave (no salto)
               DEBUG_PRINT("Ancla ");
-              DEBUG_PRINT(ID_PONG[ii]);
+              DEBUG_PRINT(ANCHOR_IDS[ii]);
               DEBUG_PRINTLN(" REACTIVADA automáticamente (Kalman reiniciado)");
             }
             continue;
           }
           
-          DW3000.setDestinationID(ID_PONG[ii]);
+          DW3000.setDestinationID(ANCHOR_IDS[ii]);
           fin_de_com = 0;
           
           while (fin_de_com == 0) {
@@ -1375,7 +1369,7 @@ void loop() {
             
             if (waitingForResponse && ((millis() - timeoutStart) >= RESPONSE_TIMEOUT)) {
               DEBUG_PRINT("Timeout REFORZADO para ancla ID: "); 
-              DEBUG_PRINTLN(ID_PONG[ii]);
+              DEBUG_PRINTLN(ANCHOR_IDS[ii]);
 
               // MEJORA TFG: Gestión inteligente de timeouts consecutivos
               consecutiveTimeouts[ii]++;
@@ -1383,7 +1377,7 @@ void loop() {
                 anchorDead[ii] = true;
                 consecutiveTimeouts[ii] = 5; // Desactivar por 5 ciclos TDMA
                 DEBUG_PRINT("Ancla ");
-                DEBUG_PRINT(ID_PONG[ii]);
+                DEBUG_PRINT(ANCHOR_IDS[ii]);
                 DEBUG_PRINTLN(" marcada como MUERTA por 5 ciclos");
               }
 
@@ -1414,13 +1408,13 @@ void loop() {
               case 1:
                 if (rx_status = DW3000.receivedFrameSucc()) {
                   DW3000.clearSystemStatus(); // Limpiar estado del sistema después de la recepción
-                  if ((rx_status == 1) && (DW3000.getDestinationID() == ID_PONG[ii])) {
+                  if ((rx_status == 1) && (DW3000.getDestinationID() == ANCHOR_IDS[ii])) {
                     if (DW3000.ds_isErrorFrame()) {
                       DEBUG_PRINTLN(F("[WARNING] Error frame detected! Reverting to stage 0."));
                       curr_stage = 0;
                       waitingForResponse = false;
                       // No rompemos el while (fin_de_com), dejamos que intente de nuevo o timeoutee si el ancla sigue mal
-                    } else if ((DW3000.getDestinationID() != ID_PONG[ii])) {
+                    } else if ((DW3000.getDestinationID() != ANCHOR_IDS[ii])) {
                       // Mensaje para otra ancla, reiniciar protocolo para evitar bucle infinito
                       curr_stage = 0; // TFG v2.1-PRODUCTION: Volver a stage 0
                       waitingForResponse = false;
@@ -1503,7 +1497,7 @@ void loop() {
 
                 anchor_responded[ii] = true;
                 consecutiveTimeouts[ii] = 0; // MEJORA TFG: Resetear contador de timeouts en éxito
-                last_anchor_id = String(ID_PONG[ii]); // MEJORA TFG: Actualizar último ancla exitosa 
+                last_anchor_id = String(ANCHOR_IDS[ii]); // MEJORA TFG: Actualizar último ancla exitosa 
                 if (distance > 0) { 
                     anchor_distance[ii] = kalmanFilterDistance(distance, ii);
                 } else {
@@ -1515,7 +1509,7 @@ void loop() {
                 // TFG v2.1-FINAL: MQTT con formato optimizado y validación de overflow
                 SAFE_MQTT_SNPRINTF(pendingMqttData, 
                         "%d,%lu,%d,%lu,%lu,%d,%d",
-                        TAG_ID, millis(), ID_PONG[ii], 
+                        TAG_ID, millis(), ANCHOR_IDS[ii], 
                         (unsigned long)round(distance), (unsigned long)round(anchor_distance[ii]), 
                         (int)round(pot_sig[ii]), anchor_responded[ii] ? 1 : 0);
                 mqttPublishPending = true;
