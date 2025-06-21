@@ -84,6 +84,16 @@ A10(-1,-1)🔶─────────🔶───────────�
 - ✅ **Geometría robusta** - Buena triangulación en toda la cancha
 - ✅ **Fácil instalación** - Montaje en perímetro del pabellón
 - ✅ **Redundancia** - 5 anclas para mayor precisión
+
+### **Ventajas del Hardware Makerfabs DW3000:**
+- 🚀 **Tecnología de última generación** - Chip DW3000 vs DW1000 anterior
+- 🔋 **Consumo ultra-eficiente** - 66% menos consumo energético
+- 📱 **Compatible con Apple U1** - Interoperabilidad con dispositivos Apple
+- 📡 **Doble banda UWB** - Canales 5 (6.5GHz) y 9 (8GHz)
+- 🎯 **Precisión mejorada** - Mejor tracking que generación anterior
+- 🛡️ **Certificación FiRa™** - Estándar industrial para UWB
+- 🔌 **Plug & Play** - No requiere soldadura ni conexiones externas
+- 💻 **Arduino nativo** - Compatible con IDE estándar
 ```
 
 ## 📁 Estructura del Proyecto
@@ -238,36 +248,49 @@ jupyter lab
 
 ## **Hardware Requerido**
 
-### **Por Ancla (x5 unidades):**
-- ESP32 DevKit v1 o similar
-- Módulo DW3000 UWB
-- Antena UWB
-- Alimentación 5V/2A
-- Carcasa protectora IP65
+### **Placas UWB (x6 unidades disponibles):**
+- **Modelo:** [Makerfabs ESP32 UWB DW3000](https://www.makerfabs.com/esp32-uwb-dw3000.html)
+- **Chip UWB:** Decawave DW3000 (última generación)
+- **Microcontrolador:** ESP32 WROOM/WROVER
+- **Conectividad:** WiFi, Bluetooth integrados
+- **Alimentación:** Micro-USB (5V)
+- **Distribución:** 5 anclas + 1 tag (configuración actual)
 
-### **Por Tag (x1+ unidades):**
-- ESP32 DevKit v1 
-- Módulo DW3000 UWB
-- Batería LiPo 3.7V/1000mAh
-- Carcasa deportiva ligera
+### **Especificaciones ESP32 UWB DW3000:**
+- ✅ **Compatible con Apple U1 chip** - Interoperabilidad avanzada
+- ✅ **Consumo ultra-bajo** - 1/3 del consumo vs DW1000
+- ✅ **Canales UWB:** Ch5 (6.5 GHz) y Ch9 (8 GHz)
+- ✅ **Certificación FiRa™** - Estándar PHY y MAC
+- ✅ **Precisión mejorada** - Tracking de alta precisión
+- ✅ **Arduino compatible** - Fácil programación
+- ✅ **Rango de alimentación:** 4.8-5.5V (5.0V típico)
 
 ### **Infraestructura:**
 - Router WiFi 2.4GHz/5GHz
 - Servidor MQTT (ej: Mosquitto)
 - PC/Servidor para análisis de datos
+- Cables Micro-USB para programación y alimentación
 
 ## **Preparación del Hardware**
+
+### **Placas Makerfabs ESP32 UWB DW3000:**
+Las placas ya vienen **completamente integradas** con el chip DW3000 soldado y configurado. No requieren conexiones adicionales.
+
+### **Conexiones internas de la placa:**
 ```bash
-# Conexiones ESP32 <-> DW3000
-VCC  -> 3.3V
-GND  -> GND  
-CS   -> GPIO5
-MOSI -> GPIO23
-MISO -> GPIO19
-CLK  -> GPIO18
-IRQ  -> GPIO34
-RST  -> GPIO27
+# Conexiones ESP32 <-> DW3000 (ya realizadas en PCB)
+DW3000_VCC  -> ESP32 3.3V
+DW3000_GND  -> ESP32 GND  
+DW3000_CS   -> ESP32 GPIO5
+DW3000_MOSI -> ESP32 GPIO23
+DW3000_MISO -> ESP32 GPIO19
+DW3000_CLK  -> ESP32 GPIO18
+DW3000_IRQ  -> ESP32 GPIO34
+DW3000_RST  -> ESP32 GPIO27
 ```
+
+### **Librería recomendada:**
+Según Makerfabs, para DW3000 usar: [Makerfabs-ESP32-UWB-DW3000](https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000)
 
 ## **Configuración de Software**
 
@@ -275,11 +298,19 @@ RST  -> GPIO27
 1. Instalar **ESP32 Board Package** (v2.0.0+)
 2. Instalar librerías requeridas:
    ```
-   - DW3000 (compatible con ESP32)
+   - Makerfabs-ESP32-UWB-DW3000 (específica para DW3000)
    - PubSubClient (MQTT)
    - ArduinoJson (v6+)
    - WiFi (incluida con ESP32)
    ```
+
+#### **Configuración específica para Makerfabs DW3000:**
+- **Placa:** ESP32 Dev Module
+- **Partición:** Default 4MB with spiffs  
+- **CPU Frequency:** 240MHz
+- **Flash Mode:** DIO
+- **Flash Size:** 4MB
+- **Puerto:** Seleccionar el puerto COM correspondiente
 
 ### **Configuración de Red:**
 1. Editar `common/secrets.h`:
@@ -306,6 +337,33 @@ RST  -> GPIO27
 1. Abrir uwb_tag/tag.ino
 2. Compilar y cargar al ESP32 del tag
 ```
+
+### **Próximos Pasos con Hardware Real:**
+
+#### **1. Configuración inicial (6 placas disponibles):**
+```bash
+# Distribución recomendada:
+- 5 placas → Anclas fijas (IDs: 10, 20, 30, 40, 50)  
+- 1 placa → Tag móvil (ID: 1)
+```
+
+#### **2. Verificación del hardware:**
+- ✅ Conectar cada placa vía Micro-USB
+- ✅ Verificar que aparecen como dispositivos COM
+- ✅ Probar carga de sketch básico en cada una
+- ✅ Verificar comunicación UWB entre placas
+
+#### **3. Instalación física:**
+- 📍 Montar las 5 anclas en las posiciones calculadas
+- 📍 Configurar alimentación permanente para anclas
+- 📍 Verificar cobertura WiFi en todas las posiciones
+- 📍 Comprobar que no hay obstáculos metálicos grandes
+
+#### **4. Pruebas de sistema:**
+- 🧪 Ranging entre anclas y tag en modo estático
+- 🧪 Movimiento del tag por la cancha
+- 🧪 Captura de datos reales via MQTT
+- 🧪 Validación con sistema de replay
 
 ---
 
@@ -652,12 +710,13 @@ Este es un **Trabajo de Fin de Grado** en desarrollo activo.
 
 ## **Estado Actual:**
 - 🟢 **Diseño del sistema** - Completado
-- 🟢 **Implementación hardware** - Completado
+- 🟢 **Hardware adquirido** - 6x ESP32 UWB DW3000 disponibles ✅
+- 🟢 **Implementación firmware** - Completado
 - 🟢 **Algoritmos de localización** - Completado
 - 🟢 **Sistema de análisis** - Completado
 - 🟢 **Filtros avanzados** - Completado (Kalman + ML)
 - 🟢 **Sistema de replay** - Completado
-- 🟡 **Validación experimental** - En progreso
+- 🟡 **Validación experimental** - En progreso con hardware real
 - 🔴 **Documentación final** - Pendiente
 
 ## **Tecnologías Implementadas:**
