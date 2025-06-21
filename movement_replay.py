@@ -519,11 +519,11 @@ class FutsalReplaySystem:
     def draw_uwb_anchors(self):
         """Dibujar posiciones de anclas UWB optimizadas"""
         anchors = {
-            'A10': (-1, -1, 'red'),     # SW
-            'A20': (-1, 21, 'blue'),    # NW  
-            'A30': (41, -1, 'green'),   # SE
-            'A40': (41, 21, 'orange'),  # NE
-            'A50': (20, 25, 'purple')   # Norte
+            'A10': (-1, -1, 'red'),     # Esquina Suroeste
+            'A20': (-1, 21, 'blue'),    # Esquina Noroeste  
+            'A30': (41, -1, 'green'),   # Esquina Sureste
+            'A40': (41, 21, 'orange'),  # Esquina Noreste
+            'A50': (20, -1, 'purple')   # Centro campo Sur
         }
         
         for anchor_id, (x, y, color) in anchors.items():

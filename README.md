@@ -54,11 +54,8 @@ El sistema utiliza **5 anclas estratégicamente posicionadas** en una cancha de 
 ## 🏗️ Arquitectura del Sistema
 
 ```
-Configuración Óptima UWB - Cancha Fútbol Sala (40m x 20m)
+Configuración UWB - Cancha Fútbol Sala (40m x 20m)
 
-      A50(20,25)
-         🔶
-         │
 A20(-1,21)🔶─────────────────────────────🔶A40(41,21)
          │                               │
          │    ┌───────────────────┐      │
@@ -68,17 +65,25 @@ A20(-1,21)🔶──────────────────────
          │    │                   │      │
          │    └───────────────────┘      │
          │                               │
-A10(-1,-1)🔶─────────────────────────────🔶A30(41,-1)
+A10(-1,-1)🔶─────────🔶─────────────────🔶A30(41,-1)
+                    A50(20,-1)
 
 🔶: Anclas UWB fijas (fuera de la cancha)
 🎯: Tag móvil del jugador
 
+### **Nueva Configuración de Anclas:**
+- **A10(-1,-1)** - Esquina Suroeste (fuera de cancha)
+- **A20(-1,21)** - Esquina Noroeste (fuera de cancha)  
+- **A30(41,-1)** - Esquina Sureste (fuera de cancha)
+- **A40(41,21)** - Esquina Noreste (fuera de cancha)
+- **A50(20,-1)** - Centro campo lateral Sur (fuera de cancha)
+
 ### **Ventajas de esta Configuración:**
-- ✅ **No interfiere con el juego** - Anclas fuera del área
-- ✅ **Evita líneas paralelas** - Mejor condicionamiento de la triangulación
-- ✅ **Cobertura completa** - Sin zonas muertas en toda la cancha
-- ✅ **Geometría óptima** - Ángulos favorables para precisión UWB
-- ✅ **Instalación práctica** - Montaje en postes/paredes del pabellón
+- ✅ **No interfiere con el juego** - Todas las anclas fuera del área
+- ✅ **Cobertura equilibrada** - 4 esquinas + 1 punto central
+- ✅ **Geometría robusta** - Buena triangulación en toda la cancha
+- ✅ **Fácil instalación** - Montaje en perímetro del pabellón
+- ✅ **Redundancia** - 5 anclas para mayor precisión
 ```
 
 ## 📁 Estructura del Proyecto
@@ -91,15 +96,15 @@ TFG-UWB/
 ├── common/                      # ⚙️ Configuración centralizada
 │   ├── config.h                 # Parámetros del sistema
 │   └── secrets.h                # Credenciales de red (no versionado)
-├── uwb_anchor_10/               # 📡 Ancla esquina SW (-1,-1)
+├── uwb_anchor_10/               # 📡 Ancla esquina Suroeste (-1,-1)
 │   └── anchor_10.ino            # Firmware ancla ID=10
-├── uwb_anchor_20/               # 📡 Ancla esquina NW (-1,21)
+├── uwb_anchor_20/               # 📡 Ancla esquina Noroeste (-1,21)
 │   └── anchor_20.ino            # Firmware ancla ID=20
-├── uwb_anchor_30/               # 📡 Ancla esquina SE (41,-1)
+├── uwb_anchor_30/               # 📡 Ancla esquina Sureste (41,-1)
 │   └── anchor_30.ino            # Firmware ancla ID=30
-├── uwb_anchor_40/               # 📡 Ancla esquina NE (41,21)
+├── uwb_anchor_40/               # 📡 Ancla esquina Noreste (41,21)
 │   └── anchor_40.ino            # Firmware ancla ID=40
-├── uwb_anchor_50/               # 📡 Ancla lateral N (20,25)
+├── uwb_anchor_50/               # 📡 Ancla centro campo Sur (20,-1)
 │   └── anchor_50.ino            # Firmware ancla ID=50
 ├── uwb_tag/                     # 🏃 Tag móvil
 │   └── tag.ino                  # Firmware tag con algoritmos de localización

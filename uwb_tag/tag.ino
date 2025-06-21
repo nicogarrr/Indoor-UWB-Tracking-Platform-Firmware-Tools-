@@ -472,11 +472,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
         // COHERENCIA TFG: Posiciones de anclas para cancha oficial de fútbol sala (40x20m)
         const anchorsPosMetros = [
-          { id: 10, x: 0.0, y: 0.0 },    // Esquina inferior izquierda
-          { id: 20, x: 0.0, y: 20.0 },   // Esquina superior izquierda  
-          { id: 30, x: 40.0, y: 0.0 },   // Esquina inferior derecha
-          { id: 40, x: 40.0, y: 20.0 },  // Esquina superior derecha
-          { id: 50, x: 20.0, y: 10.0 }   // Centro exacto de la cancha
+          { id: 10, x: -1.0, y: -1.0 },   // Esquina Suroeste (fuera de cancha)
+          { id: 20, x: -1.0, y: 21.0 },   // Esquina Noroeste (fuera de cancha)  
+          { id: 30, x: 41.0, y: -1.0 },   // Esquina Sureste (fuera de cancha)
+          { id: 40, x: 41.0, y: 21.0 },   // Esquina Noreste (fuera de cancha)
+          { id: 50, x: 20.0, y: -1.0 }    // Centro campo Sur (fuera de cancha)
         ];
 
         const border = document.createElement('div');

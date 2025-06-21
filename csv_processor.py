@@ -127,11 +127,11 @@ class UWBDataProcessor:
     def calculate_distances_to_anchors(self, df):
         """Calcula distancias a todas las anclas UWB"""
         anchor_positions = {
-            10: (-1, -1),   # SW
-            20: (-1, 21),   # NW  
-            30: (41, -1),   # SE
-            40: (41, 21),   # NE
-            50: (20, 25)    # North
+            10: (-1, -1),   # Esquina Suroeste
+            20: (-1, 21),   # Esquina Noroeste  
+            30: (41, -1),   # Esquina Sureste
+            40: (41, 21),   # Esquina Noreste
+            50: (20, -1)    # Centro campo Sur
         }
         
         for anchor_id, (ax, ay) in anchor_positions.items():
