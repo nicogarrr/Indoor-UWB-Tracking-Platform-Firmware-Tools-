@@ -297,6 +297,39 @@ class UWBDataProcessor:
         
         return df
 
+    def process_single_file(self, csv_file, output_dir="processed_data"):
+        """
+        Procesa un archivo CSV individual con pipeline completo
+        
+        Args:
+            csv_file (str): Ruta al archivo CSV
+            output_dir (str): Directorio de salida para datos procesados
+            
+        Returns:
+            pd.DataFrame: Datos procesados
+        """
+        # Cargar datos
+        df = self.load_csv_data(csv_file)
+        if df is None or df.empty:
+            return None
+        
+        # Pipeline de procesamiento
+        df = self.calculate_distances_to_anchors(df)
+        df = self.filter_outliers_by_anchor(df)
+        df = self.filter_impossible_velocities(df)
+        df = self.interpolate_to_constant_frequency(df)
+        df = self.apply_smoothing(df)
+        df = self.calculate_movement_metrics(df)
+        
+        # Guardar datos procesados
+        os.makedirs(output_dir, exist_ok=True)
+        base_name = os.path.splitext(os.path.basename(csv_file))[0]
+        output_file = os.path.join(output_dir, f"{base_name}_processed.csv")
+        df.to_csv(output_file, index=False)
+        print(f"   💾 Datos procesados guardados: {os.path.basename(output_file)}")
+        
+        return df
+
 
 def main():
     """Función principal para ejecutar el procesador"""
