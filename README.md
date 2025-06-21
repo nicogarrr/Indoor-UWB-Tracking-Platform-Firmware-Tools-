@@ -12,6 +12,27 @@ Sistema de posicionamiento indoor de alta precisión basado en tecnología **Ult
 
 El sistema utiliza **5 anclas estratégicamente posicionadas** en una cancha de 40x20m para triangular la posición de jugadores equipados con tags UWB, proporcionando datos precisos de movimiento, velocidad y posicionamiento táctico en tiempo real.
 
+## 📡 Tecnología Ultra-Wideband (UWB) DW3000
+
+**Ultra-Wideband (UWB)** es un protocolo de comunicación inalámbrica de corto alcance que opera a través de ondas de radio, permitiendo ranging seguro y confiable y detección de precisión, creando una nueva dimensión de contexto espacial para dispositivos inalámbricos.
+
+### **🚀 Evolución Tecnológica: DW1000 → DW3000**
+
+El módulo **Makerfabs ESP32 UWB**, basado inicialmente en el IC DecaWave DW1000, ha sido muy popular entre desarrolladores. Tras extensas comparaciones y pruebas, ahora está disponible la versión **DW3000** con ventajas significativas:
+
+#### **Ventajas Clave del DW3000:**
+1. **🍎 Más importante:** Interoperable con chip Apple U1, posibilitando trabajo con el ecosistema Apple
+2. **🛡️ Certificación FiRa™:** Completamente alineado con desarrollo PHY, MAC y certificación FiRa™, haciéndolo más adecuado para aplicaciones futuras
+3. **🔋 Menor consumo:** Aproximadamente 1/3 del consumo del DW1000
+4. **📡 Doble banda:** Soporta canales UWB 5 (6.5 GHz) y 9 (8 GHz), mientras DW1000 no soporta canal 9
+
+### **🔧 Características Hardware del TFG:**
+- **Chip UWB:** Decawave DW3000 (última generación)
+- **Microcontrolador:** ESP32 WROVER (8MB PSRAM + 4MB Flash)
+- **Conectividad:** WiFi 2.4G, Bluetooth, UWB
+- **Alimentación:** USB 4.8-5.5V, 5.0V típico
+- **Compatibilidad:** Arduino nativo con demos incluidos
+
 ## 📚 **NAVEGACIÓN RÁPIDA**
 - [🚀 Guía Rápida de Uso](#-guía-rápida-de-uso)
 - [🛠️ Instalación Completa](#️-instalación-y-configuración-completa)
@@ -85,20 +106,34 @@ A10(-1,-1)🔶─────────🔶───────────�
 - ✅ **Fácil instalación** - Montaje en perímetro del pabellón
 - ✅ **Redundancia** - 5 anclas para mayor precisión
 
-### **Ventajas del Hardware Makerfabs DW3000 WROVER:**
-- 🚀 **Tecnología de última generación** - Chip DW3000 vs DW1000 anterior
-- 🔋 **Consumo ultra-eficiente** - 66% menos consumo energético
-- 📱 **Compatible con Apple U1** - Interoperabilidad con dispositivos Apple
-- 📡 **Doble banda UWB** - Canales 5 (6.5GHz) y 9 (8GHz)
-- 🎯 **Precisión mejorada** - Mejor tracking que generación anterior
-- 🛡️ **Certificación FiRa™** - Estándar industrial para UWB
-- 🔌 **Plug & Play** - No requiere soldadura ni conexiones externas
-- 💻 **Arduino nativo** - Compatible con IDE estándar
-- 🧠 **ESP32 WROVER específico:**
-  - **8MB PSRAM** - Memoria adicional para buffers UWB grandes
-  - **4MB Flash** - Espacio para firmware complejo
-  - **Mejor rendimiento** - Ideal para aplicaciones de tiempo real
-  - **Multitarea avanzada** - Procesamiento paralelo WiFi + UWB
+### **Hardware Makerfabs ESP32 UWB DW3000 - Especificaciones del TFG:**
+
+#### 🔧 **Hardware Físico Disponible:**
+- **Cantidad:** 6 placas ESP32 UWB DW3000 (Universidad de Oviedo)
+- **Distribución:** 5 anclas + 1 tag móvil
+- **Modelo:** Makerfabs ESP32 UWB DW3000
+- **Variante:** ESP32 WROVER (8MB PSRAM + 4MB Flash)
+- **Conectividad:** Micro-USB, WiFi, Bluetooth
+- **Alimentación:** USB 4.8-5.5V, 5.0V típico
+- **Repositorio oficial:** [Makerfabs-ESP32-UWB-DW3000](https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000)
+
+#### 🚀 **Ventajas del DW3000 vs DW1000 (Generación Anterior):**
+1. **🍎 Interoperabilidad Apple U1** - Compatible con chip U1 de dispositivos Apple
+2. **🛡️ Certificación FiRa™** - Estándar PHY, MAC y certificación para aplicaciones industriales
+3. **🔋 Consumo ultra-eficiente** - Aproximadamente 1/3 del consumo del DW1000
+4. **📡 Doble banda UWB** - Soporte para canales 5 (6.5 GHz) y 9 (8 GHz)
+5. **🎯 Precisión mejorada** - Mejor tracking y reducción de errores
+6. **⚡ Transmisión optimizada** - Protocolo de comunicación más eficiente
+
+#### 🧠 **Ventajas Específicas ESP32 WROVER para Ciencia e Ingeniería de Datos:**
+- **8MB PSRAM** - Memoria extendida para:
+  - Buffers UWB de gran tamaño
+  - Algoritmos de machine learning complejos  
+  - Procesamiento de señales en tiempo real
+  - Filtros Kalman con historial extendido
+- **4MB Flash** - Espacio para firmware avanzado con múltiples librerías
+- **Multitarea avanzada** - Procesamiento paralelo WiFi + UWB sin interferencias
+- **Ideal para TFG** - Capacidad computacional para algoritmos de análisis deportivo
 ```
 
 ## 📁 Estructura del Proyecto
@@ -298,29 +333,63 @@ DW3000_IRQ  -> ESP32 GPIO34
 DW3000_RST  -> ESP32 GPIO27
 ```
 
-### **Librería recomendada:**
-Según Makerfabs, para DW3000 usar: [Makerfabs-ESP32-UWB-DW3000](https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000)
+## **Configuración de Software para DW3000**
 
-## **Configuración de Software**
+### **Librería Oficial Makerfabs DW3000:**
+**Repositorio:** [Makerfabs-ESP32-UWB-DW3000](https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000)
 
-### **Arduino IDE:**
-1. Instalar **ESP32 Board Package** (v2.0.0+)
-2. Instalar librerías requeridas:
-   ```
-   - Makerfabs-ESP32-UWB-DW3000 (específica para DW3000)
-   - PubSubClient (MQTT)
-   - ArduinoJson (v6+)
-   - WiFi (incluida con ESP32)
-   ```
+> ⚠️ **Nota importante:** La librería DW3000 fue desarrollada por NConcepts, no por Makerfabs. Makerfabs mantiene el repositorio oficial.
 
-#### **Configuración específica para Makerfabs DW3000 WROVER:**
-- **Placa:** ESP32 WROVER Module
-- **Partición:** Default 4MB with spiffs (o Huge APP para aprovechar 8MB PSRAM)
-- **CPU Frequency:** 240MHz
-- **Flash Mode:** DIO
-- **Flash Size:** 4MB
-- **PSRAM:** Enabled (para aprovechar los 8MB adicionales)
-- **Puerto:** Seleccionar el puerto COM correspondiente
+#### **Instalación de la librería:**
+1. Descargar repositorio: https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000
+2. Copiar carpeta `Dw3000` al directorio de librerías de Arduino
+3. Reiniciar Arduino IDE
+
+### **Arduino IDE - Configuración para ESP32 WROVER + DW3000:**
+
+#### **Configuración del Board Manager:**
+1. **ESP32 Board Package:** v2.0.0+ (recomendado v2.0.9+)
+2. **Placa específica:** ESP32 WROVER Module
+
+#### **Configuración Hardware (Herramientas → Configuración):**
+- **Board:** ESP32 WROVER Module  
+- **Upload Speed:** 921600
+- **CPU Frequency:** 240MHz (máximo rendimiento)
+- **Flash Mode:** DIO (compatibilidad DW3000)
+- **Flash Size:** 4MB (32Mb)
+- **Partition Scheme:** Default 4MB with spiffs
+- **PSRAM:** Enabled (CRÍTICO - aprovechar 8MB PSRAM)
+- **Core Debug Level:** None (producción) o Info (desarrollo)
+
+#### **Librerías Adicionales Requeridas:**
+```
+📦 Librerías del TFG:
+├── Dw3000 (específica DW3000) - Desde repositorio Makerfabs
+├── PubSubClient - Cliente MQTT para ESP32
+├── ArduinoJson v6+ - Manejo de JSON para configuración
+├── WiFi - Incluida con ESP32 Core
+└── EEPROM - Persistencia de datos (incluida)
+```
+
+#### **Verificación de Configuración:**
+```cpp
+// Código de prueba básico para verificar DW3000:
+#include "dw3000.h"
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Test Makerfabs ESP32 UWB DW3000");
+  
+  // Verificar PSRAM
+  if(psramFound()){
+    Serial.println("✅ PSRAM 8MB detectada");
+  } else {
+    Serial.println("❌ Error: PSRAM no detectada");
+  }
+  
+  // Tu código de inicialización DW3000...
+}
+```
 
 ### **Configuración de Red:**
 1. Editar `common/secrets.h`:
@@ -348,6 +417,37 @@ Según Makerfabs, para DW3000 usar: [Makerfabs-ESP32-UWB-DW3000](https://github.
 2. Compilar y cargar al ESP32 del tag
 ```
 
+### **Ejemplos Oficiales Makerfabs DW3000:**
+
+El repositorio oficial incluye dos ejemplos básicos para verificar funcionamiento:
+
+#### **🔧 simple_test:**
+- **TX:** simple_test con modo transmisión
+- **RX:** simple_test con modo recepción  
+- **Función:** Envío/recepción básica de mensajes UWB
+- **Uso:** Verificar comunicación entre placas
+
+#### **📏 range:**
+- **range_tx:** Dispositivo transmisor (ancla)
+- **range_rx:** Dispositivo receptor (tag) - muestra distancia por serial
+- **Función:** Medición básica de distancia UWB
+- **Salida:** Distancia en metros via puerto serie
+
+#### **Pruebas Recomendadas Pre-TFG:**
+```bash
+# 1. Test básico de comunicación
+# Cargar simple_test en modo TX a una placa
+# Cargar simple_test en modo RX a otra placa
+# Verificar envío/recepción de mensajes
+
+# 2. Test de ranging básico  
+# Cargar range_tx a una placa (simula ancla)
+# Cargar range_rx a otra placa (simula tag)
+# Verificar medición de distancia por serial monitor
+```
+
+> **💡 Tip para el TFG:** Una vez verificados estos ejemplos básicos, tu código del proyecto (anclas + tag) implementa un sistema TDMA completo con 5 anclas simultáneas y triangulación automática.
+
 ### **Próximos Pasos con Hardware Real:**
 
 #### **1. Configuración inicial (6 placas disponibles):**
@@ -357,11 +457,77 @@ Según Makerfabs, para DW3000 usar: [Makerfabs-ESP32-UWB-DW3000](https://github.
 - 1 placa → Tag móvil (ID: 1)
 ```
 
-#### **2. Verificación del hardware:**
-- ✅ Conectar cada placa vía Micro-USB
-- ✅ Verificar que aparecen como dispositivos COM
-- ✅ Probar carga de sketch básico en cada una
-- ✅ Verificar comunicación UWB entre placas
+#### **2. Verificación inicial del hardware DW3000:**
+
+##### **Paso 1: Conexión física**
+```bash
+# Para cada una de las 6 placas ESP32 UWB DW3000:
+1. Conectar vía cable Micro-USB al PC
+2. Verificar que aparece como puerto COM (ej: COM3, COM4...)
+3. En Arduino IDE → Herramientas → Puerto: Seleccionar puerto correcto
+```
+
+##### **Paso 2: Test de la placa básico**
+```cpp
+// Cargar este código simple para verificar cada placa:
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("=== Test ESP32 UWB DW3000 ===");
+  Serial.println("Modelo: Makerfabs ESP32 UWB DW3000");
+  Serial.println("Chip: ESP32 WROVER");
+  
+  // Verificar PSRAM de 8MB
+  if(psramFound()){
+    Serial.printf("✅ PSRAM detectada: %d bytes\n", ESP.getPsramSize());
+  } else {
+    Serial.println("❌ Error: PSRAM no detectada");
+  }
+  
+  // Información básica
+  Serial.printf("Chip: %s\n", ESP.getChipModel());
+  Serial.printf("Frecuencia CPU: %d MHz\n", ESP.getCpuFreqMHz());
+  Serial.printf("Flash: %d MB\n", ESP.getFlashChipSize() / 1024 / 1024);
+  Serial.printf("RAM libre: %d KB\n", ESP.getFreeHeap() / 1024);
+}
+
+void loop() {
+  Serial.println("Placa funcionando correctamente...");
+  delay(2000);
+}
+```
+
+##### **Paso 3: Test básico de DW3000**
+```bash
+# Una vez verificadas las placas básicas:
+1. Descargar ejemplos del repositorio Makerfabs
+2. Cargar example/simple_test/simple_test.ino en modo TX (1 placa)
+3. Cargar example/simple_test/simple_test.ino en modo RX (otra placa)
+4. Verificar comunicación UWB por serial monitor
+```
+
+##### **Paso 4: Test de ranging DW3000**
+```bash
+# Test de medición de distancia:
+1. Cargar example/range/range_tx.ino en placa 1 (ancla simulada)
+2. Cargar example/range/range_rx.ino en placa 2 (tag simulado)
+3. Observar mediciones de distancia en serial monitor del RX
+4. Mover las placas y verificar que la distancia cambia
+```
+
+##### **Resultado esperado:**
+```bash
+✅ Test exitoso si ves:
+- PSRAM 8MB detectada en cada placa
+- Comunicación UWB entre placas (TX/RX)
+- Mediciones de distancia estables y realistas
+- Sin errores de compilación o carga
+
+❌ Resolver si encuentras:
+- PSRAM no detectada → Verificar configuración WROVER
+- Error de comunicación UWB → Revisar librería DW3000
+- Mediciones erróneas → Verificar posicionamiento de placas
+```
 
 #### **3. Instalación física:**
 - 📍 Montar las 5 anclas en las posiciones calculadas
