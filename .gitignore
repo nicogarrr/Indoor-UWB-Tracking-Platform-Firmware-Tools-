@@ -1,0 +1,32 @@
+# ===== CREDENCIALES SENSIBLES =====
+# Archivo centralizado de credenciales
+common/secrets.h
+# Archivos de credenciales en cualquier ubicación (por compatibilidad)
+secrets.h
+*.credentials
+*.env.local
+
+# ===== PLATFORMIO =====
+.pio/
+.vscode/
+lib/
+.gitignore.backup
+
+# ===== COMPILACIÓN =====
+*.bin
+*.elf
+*.map
+
+# ===== LOGS Y DATOS =====
+*.log
+data/
+logs/
+
+# ===== TEMPORALES =====
+*.tmp
+*.bak
+*~
+
+# ===== SISTEMA =====
+.DS_Store
+Thumbs.db 
