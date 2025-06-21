@@ -214,14 +214,14 @@ const ZoneConfig FUTSAL_ZONES[NUM_ZONES] = {
   {20.0f, 2.0f, 8.0f, 500, "Banda_Lateral"}
 };
 
-// ===== POSICIONES DE ANCLAS PARA FÚTBOL SALA =====
-// TFG v2.1: Configuración FINAL para exactamente 5 anclas en cancha 40x20m
+// ===== POSICIONES ÓPTIMAS DE ANCLAS UWB PARA FÚTBOL SALA =====
+// Configuración optimizada para evitar líneas paralelas y maximizar precisión
 const float ANCHOR_POSITIONS[MAX_ANCHORS][2] = {
-  {0.0f, 0.0f},     // Ancla 10 - Esquina inferior izquierda
-  {0.0f, 20.0f},    // Ancla 20 - Esquina superior izquierda  
-  {40.0f, 0.0f},    // Ancla 30 - Esquina inferior derecha
-  {40.0f, 20.0f},   // Ancla 40 - Esquina superior derecha
-  {20.0f, 10.0f}    // Ancla 50 - Centro exacto de la cancha
+  {-1.0f, -1.0f},   // Ancla 10 - Fuera esquina inferior izquierda
+  {-1.0f, 21.0f},   // Ancla 20 - Fuera esquina superior izquierda  
+  {41.0f, -1.0f},   // Ancla 30 - Fuera esquina inferior derecha
+  {41.0f, 21.0f},   // Ancla 40 - Fuera esquina superior derecha
+  {20.0f, 25.0f}    // Ancla 50 - Centrada fuera de banda superior
 };
 
 // IDs de las 5 anclas del TFG

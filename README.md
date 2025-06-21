@@ -45,20 +45,31 @@ El sistema utiliza **5 anclas estratégicamente posicionadas** en una cancha de 
 ## 🏗️ Arquitectura del Sistema
 
 ```
-Cancha de Fútbol Sala (40m x 20m)
-┌─────────────────────────────────────────┐
-│ A20(0,20)               A40(40,20)      │
-│    ┌─────────────────────────┐          │
-│    │                         │          │
-│    │        A50(20,10)       │          │
-│    │           🎯            │          │
-│    │                         │          │
-│    └─────────────────────────┘          │
-│ A10(0,0)                A30(40,0)       │
-└─────────────────────────────────────────┘
+Configuración Óptima UWB - Cancha Fútbol Sala (40m x 20m)
 
-A10-A50: Anclas UWB (ESP32+DW3000)
-🎯: Tag del jugador (móvil)
+      A50(-1,25)
+         🔶
+         │
+A20(-1,21)🔶─────────────────────────────🔶A40(41,21)
+         │                               │
+         │    ┌───────────────────┐      │
+         │    │                   │      │
+         │    │        🎯         │      │
+         │    │    (Área juego)   │      │
+         │    │                   │      │
+         │    └───────────────────┘      │
+         │                               │
+A10(-1,-1)🔶─────────────────────────────🔶A30(41,-1)
+
+🔶: Anclas UWB fijas (fuera de la cancha)
+🎯: Tag móvil del jugador
+
+### **Ventajas de esta Configuración:**
+- ✅ **No interfiere con el juego** - Anclas fuera del área
+- ✅ **Evita líneas paralelas** - Mejor condicionamiento de la triangulación
+- ✅ **Cobertura completa** - Sin zonas muertas en toda la cancha
+- ✅ **Geometría óptima** - Ángulos favorables para precisión UWB
+- ✅ **Instalación práctica** - Montaje en postes/paredes del pabellón
 ```
 
 ## 📁 Estructura del Proyecto
@@ -70,15 +81,15 @@ TFG-UWB/
 ├── common/                  # Configuración centralizada
 │   ├── config.h             # Parámetros del sistema
 │   └── secrets.h            # Credenciales de red (no versionado)
-├── uwb_anchor_10/           # Ancla posición (0,0)
+├── uwb_anchor_10/           # Ancla esquina SW (-1,-1)
 │   └── anchor_10.ino        # Firmware ancla ID=10
-├── uwb_anchor_20/           # Ancla posición (0,20)
+├── uwb_anchor_20/           # Ancla esquina NW (-1,21)
 │   └── anchor_20.ino        # Firmware ancla ID=20
-├── uwb_anchor_30/           # Ancla posición (40,0)
+├── uwb_anchor_30/           # Ancla esquina SE (41,-1)
 │   └── anchor_30.ino        # Firmware ancla ID=30
-├── uwb_anchor_40/           # Ancla posición (40,20)
+├── uwb_anchor_40/           # Ancla esquina NE (41,21)
 │   └── anchor_40.ino        # Firmware ancla ID=40
-├── uwb_anchor_50/           # Ancla posición (20,10)
+├── uwb_anchor_50/           # Ancla lateral N (20,25)
 │   └── anchor_50.ino        # Firmware ancla ID=50
 └── uwb_tag/                 # Tag móvil
     └── tag.ino              # Firmware tag con algoritmos de localización
