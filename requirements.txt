@@ -1,0 +1,45 @@
+# TFG UWB - Sistema GPS Indoor para Fútbol Sala
+# Dependencias para análisis de datos
+
+# Core data processing
+pandas>=1.5.0
+numpy>=1.21.0
+scipy>=1.9.0
+
+# MQTT client
+paho-mqtt>=1.6.0
+
+# Visualization and plotting
+matplotlib>=3.6.0
+seaborn>=0.12.0
+
+# Animation and video export
+pillow>=9.0.0
+ffmpeg-python>=0.2.0
+
+# JSON processing (usually included with Python)
+# json (built-in)
+
+# File operations
+glob2>=0.7
+
+# Additional utilities
+python-dateutil>=2.8.0
+pytz>=2022.1
+
+# Optional: For advanced data analysis
+scikit-learn>=1.1.0
+jupyter>=1.0.0
+ipython>=8.0.0
+
+# Optional: For advanced visualizations
+plotly>=5.10.0
+bokeh>=2.4.0
+
+# Optional: For performance monitoring
+psutil>=5.9.0
+
+# Development and testing (optional)
+pytest>=7.0.0
+black>=22.0.0
+flake8>=5.0.0 
