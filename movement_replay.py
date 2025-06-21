@@ -200,6 +200,10 @@ class TrajectoryPredictor:
         pred_x, _ = self.x_model.predict(norm_ts, return_std=True)
         pred_y, _ = self.y_model.predict(norm_ts, return_std=True)
         
+        # Asegurar que las predicciones sean arrays
+        pred_x = np.array(pred_x).flatten()
+        pred_y = np.array(pred_y).flatten()
+        
         # Aplicar restricciones de velocidad
         predictions = []
         last_pos = None
@@ -273,11 +277,14 @@ class FutsalReplaySystem:
             # Aplicar filtros avanzados
             self.apply_advanced_filtering()
             
-            if self.df is not None:
+            if self.df is not None and len(self.df) > 0:
                 print(f"📊 Duración: {(self.df['timestamp'].iloc[-1] - self.df['timestamp'].iloc[0]).total_seconds():.1f} segundos")
                 print(f"🏃 Rango X: {self.df['x'].min():.1f} - {self.df['x'].max():.1f}m")
                 print(f"🏃 Rango Y: {self.df['y'].min():.1f} - {self.df['y'].max():.1f}m")
-            
+            else:
+                print("⚠️ No se pudieron procesar los datos correctamente")
+                sys.exit(1)
+                
         except Exception as e:
             print(f"❌ Error cargando datos: {e}")
             sys.exit(1)
@@ -590,7 +597,7 @@ class FutsalReplaySystem:
     def setup_animation_controls(self):
         """Configurar controles de animación"""
         self.current_frame = 0
-        self.total_frames = len(self.df)
+        self.total_frames = len(self.df) if self.df is not None else 0
         self.is_playing = False
         self.playback_speed = 1.0
         self.max_speed = 10.0
@@ -621,7 +628,7 @@ class FutsalReplaySystem:
     
     def calculate_speed(self, frame_idx):
         """Calcular velocidad instantánea"""
-        if frame_idx == 0:
+        if self.df is None or frame_idx == 0:
             return 0.0
             
         current_row = self.df.iloc[frame_idx]
@@ -642,6 +649,9 @@ class FutsalReplaySystem:
     
     def update_frame(self, frame_idx):
         """Actualizar visualización para el frame actual"""
+        if self.df is None or len(self.df) == 0:
+            return []
+            
         if frame_idx >= self.total_frames:
             frame_idx = self.total_frames - 1
             

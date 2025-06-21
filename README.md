@@ -359,6 +359,279 @@ jupyter lab
 
 ---
 
+# 📡 **EJECUCIÓN COMPLETA DEL SISTEMA TFG**
+
+## 🚀 **Guía Paso a Paso: De Código a Datos**
+
+### **📋 REQUISITOS PREVIOS**
+```bash
+# 1. Verificar Python y dependencias
+python --version  # Python 3.8+
+pip install -r requirements.txt
+
+# 2. Verificar que todos los códigos ESP32 están compilados ✅
+# - 5 anclas: uwb_anchor_XX/anchor_XX.ino
+# - 1 tag: uwb_tag/tag/tag.ino
+```
+
+### **1️⃣ CONFIGURACIÓN BROKER MQTT MOSQUITTO**
+
+#### **Instalación en Windows:**
+```bash
+# Opción A: Winget (Recomendado)
+winget install mosquitto
+
+# Opción B: Descarga manual desde:
+# https://mosquitto.org/download/
+
+# Ubicación típica: C:\Program Files\mosquitto\
+```
+
+#### **Configuración para el TFG:**
+```bash
+# Crear archivo de configuración básica
+# C:\Program Files\mosquitto\mosquitto.conf
+
+listener 1883
+allow_anonymous true
+log_type all
+log_dest file C:\Program Files\mosquitto\mosquitto.log
+```
+
+#### **⚡ SOLUCIÓN PROBLEMA DE PERMISOS:**
+
+**Si obtienes error:** `Error: Intento de acceso a un socket no permitido por sus permisos de acceso`
+
+**✅ Solución 1: Ejecutar como Administrador**
+```bash
+# Abrir PowerShell como Administrador
+# Clic derecho en PowerShell → "Ejecutar como administrador"
+
+# Luego ejecutar:
+& "C:\Program Files\mosquitto\mosquitto.exe" -p 1883 -v
+```
+
+**✅ Solución 2: Configurar como Servicio (Recomendado)**
+```bash
+# En PowerShell como Administrador:
+& "C:\Program Files\mosquitto\mosquitto.exe" install
+
+# Iniciar servicio:
+net start mosquitto
+
+# Verificar que está funcionando:
+netstat -an | findstr 1883
+```
+
+**✅ Solución 3: Puerto Alternativo**
+```bash
+# Si el puerto 1883 está ocupado, usar otro:
+& "C:\Program Files\mosquitto\mosquitto.exe" -p 1884 -v
+```
+
+### **2️⃣ INICIAR INFRAESTRUCTURA DE DATOS**
+
+#### **Paso 1: Verificar Mosquitto**
+```bash
+# Verificar que Mosquitto está ejecutándose
+netstat -an | findstr 1883
+
+# Deberías ver:
+# TCP    0.0.0.0:1883           0.0.0.0:0              LISTENING
+# TCP    [::]:1883              [::]:0                 LISTENING
+```
+
+#### **Paso 2: Iniciar Recolector de Datos**
+```bash
+# Terminal 1: Recolector MQTT
+python mqtt_to_csv_collector.py --mqtt-server 127.0.0.1 --mqtt-port 1883 --output-dir ./data
+
+# Salida esperada:
+# 🎯 TFG UWB Data Collector iniciado
+# 📂 Directorio de salida: ./data
+# 🔗 MQTT Broker: 127.0.0.1:1883
+# 📁 Archivos:
+#    • Ranging: ./data\ranging_data_20250621_172457.csv
+#    • Posición: ./data\position_data_20250621_172457.csv
+#    • Zonas: ./data\zones_data_20250621_172457.csv
+#    • Métricas: ./data\metrics_data_20250621_172457.csv
+# ✅ Conectado al broker MQTT (rc=0)
+# 📡 Suscrito a: uwb/tag/logs
+# 📡 Suscrito a: uwb/tag/+/status
+# 📡 Suscrito a: uwb/futsal/zones
+# 📡 Suscrito a: uwb/futsal/performance
+# 📡 Suscrito a: uwb/futsal/metrics
+# 📡 Suscrito a: uwb/anchor/+/metrics
+# 🚀 Recolector iniciado. Presiona Ctrl+C para detener.
+```
+
+### **3️⃣ ACTIVAR HARDWARE ESP32 UWB**
+
+#### **Configuración de Red en las Placas:**
+```cpp
+// En common/secrets.h (crear si no existe):
+#define WIFI_SSID "TU_RED_WIFI"
+#define WIFI_PASSWORD "TU_PASSWORD"
+#define MQTT_BROKER_IP "192.168.1.100"  // IP de tu PC
+#define MQTT_PORT 1883
+```
+
+#### **Secuencia de Encendido:**
+```bash
+# 1. Conectar y encender TODAS las anclas ESP32 (5 unidades)
+#    - Se conectarán automáticamente a WiFi
+#    - Buscarán el broker MQTT
+#    - Iniciarán protocolo TDMA
+
+# 2. Conectar y encender el TAG ESP32 (1 unidad)
+#    - Se unirá al sistema de anclas
+#    - Comenzará ranging automático
+#    - Enviará datos vía MQTT
+
+# 3. Monitorear conexiones en el recolector
+#    Deberías ver mensajes como:
+#    📏 Datos ranging: 1, 2, 3...
+#    📍 Datos posición: 1, 2, 3...
+```
+
+### **4️⃣ MONITOREO EN TIEMPO REAL**
+
+#### **Panel de Control MQTT (Opcional):**
+```bash
+# Terminal 2: Monitor de topics MQTT
+& "C:\Program Files\mosquitto\mosquitto_sub.exe" -h 127.0.0.1 -t "uwb/#" -v
+
+# Verás mensajes como:
+# uwb/tag/logs TAG_1,15234567,10,245.67,244.12,-45.2,1
+# uwb/tag/1/status {"tag_id":1,"position":{"x":15.2,"y":8.7},"velocity":{"x":1.2,"y":0.8,"speed":1.44}}
+# uwb/futsal/zones {"tag_id":1,"zone":"CENTRO_CAMPO","action":"ENTERED","timestamp":15234567}
+```
+
+#### **Verificación de Archivos de Datos:**
+```bash
+# Verificar que se están generando datos
+dir data\*_*.csv
+
+# Deberías ver archivos como:
+# ranging_data_20250621_172457.csv    (datos UWB brutos)
+# position_data_20250621_172457.csv   (posiciones calculadas)
+# zones_data_20250621_172457.csv      (eventos deportivos)
+# metrics_data_20250621_172457.csv    (rendimiento del sistema)
+```
+
+### **5️⃣ PROCESAMIENTO Y VISUALIZACIÓN**
+
+#### **Procesar Datos Capturados:**
+```bash
+# Terminal 3: Procesamiento de datos
+python csv_processor.py
+
+# Esto analizará automáticamente:
+# - Todos los archivos en data/
+# - Aplicará filtros y algoritmos
+# - Generará archivos en processed_data/
+# - Creará gráficos en plots/
+```
+
+#### **Sistema de Replay en Tiempo Real:**
+```bash
+# Terminal 4: Visualización interactiva
+python movement_replay.py
+
+# O con archivo específico:
+python movement_replay.py data/ranging_data_20250621_172457.csv
+
+# Controles del replay:
+# ESPACIO: Play/Pausa
+# ← →: Frame anterior/siguiente
+# ↑ ↓: Velocidad (0.1x - 10x)
+# R: Reiniciar
+# Q: Salir
+```
+
+### **6️⃣ SOLUCIÓN DE PROBLEMAS COMUNES**
+
+#### **🔧 MQTT No Conecta:**
+```bash
+# Verificar firewall de Windows
+# Configuración → Privacidad y seguridad → Firewall de Windows
+# Permitir app: mosquitto.exe
+
+# Verificar IP del broker
+ipconfig | findstr IPv4
+# Usar esa IP en MQTT_BROKER_IP de las placas ESP32
+```
+
+#### **🔧 ESP32 No Se Conecta a WiFi:**
+```bash
+# 1. Verificar credenciales en common/secrets.h
+# 2. Asegurar red 2.4GHz (ESP32 no soporta 5GHz)
+# 3. Monitor serie Arduino IDE para ver logs de conexión
+```
+
+#### **🔧 No Llegan Datos al Recolector:**
+```bash
+# 1. Verificar topics MQTT correctos
+# 2. Confirmar que las 5 anclas están encendidas
+# 3. Verificar que el tag está dentro del rango de las anclas
+# 4. Monitor serie para ver si hay ranging exitoso
+```
+
+#### **🔧 Rendimiento Bajo del Sistema:**
+```bash
+# 1. Verificar que todas las anclas responden (5/5)
+# 2. Posicionar tag en área con buena cobertura
+# 3. Evitar obstáculos metálicos que bloqueen UWB
+# 4. Verificar latencia de red WiFi
+```
+
+### **🎯 INDICADORES DE ÉXITO**
+
+#### **✅ Sistema Funcionando Correctamente:**
+```bash
+# Recolector MQTT muestra:
+📊 Estadísticas de recolección:
+   ⏱️  Tiempo activo: 60.0s
+   📏 Datos ranging: 1200      # ~20 msgs/s
+   📍 Datos posición: 60       # ~1 msg/s
+   🏟️  Eventos zonas: 5        # Eventos deportivos
+   📈 Métricas: 12             # Métricas del sistema
+   📊 Tasa ranging: 20.0 msgs/s
+
+# Archivos CSV creciendo en tamaño
+# Replay mostrando movimientos suaves
+# Sin errores de conexión en monitor serie
+```
+
+### **📊 CONFIGURACIÓN OPTIMIZADA PARA TFG**
+
+#### **Parámetros Recomendados:**
+```cpp
+// common/config.h - Configuración para análisis deportivo
+#define TDMA_CYCLE_MS 50              // 20Hz update rate
+#define MAX_RANGING_DISTANCE_CM 5000  // 50m máximo
+#define MIN_ANCHORS_FOR_POSITION 3    // Mínimo para triangulación
+#define KALMAN_PROCESS_NOISE 0.1      // Suavizado de movimiento
+#define MQTT_PUBLISH_INTERVAL_MS 1000 // 1 segundo entre reportes
+```
+
+#### **Estructura de Datos Generada:**
+```csv
+# ranging_data_*.csv
+timestamp_system,timestamp_device,tag_id,anchor_id,distance_raw_cm,distance_filtered_cm,rssi_dbm,anchor_responded,session_id
+
+# position_data_*.csv  
+timestamp_system,timestamp_device,tag_id,position_x_m,position_y_m,velocity_x_ms,velocity_y_ms,speed_ms,prediction_x_m,prediction_y_m,responding_anchors,update_rate_hz,session_id
+
+# zones_data_*.csv
+timestamp_system,timestamp_device,tag_id,zone_name,action,position_x_m,position_y_m,velocity_x_ms,velocity_y_ms,duration_ms,session_id
+
+# metrics_data_*.csv
+timestamp_system,timestamp_device,tag_id,total_cycles,successful_triangulations,triangulation_success_rate,less_than_3_anchors,full_coverage,full_coverage_rate,average_latency_ms,average_update_rate_hz,mqtt_failures,session_id
+```
+
+---
+
 # 🛠️ INSTALACIÓN Y CONFIGURACIÓN COMPLETA
 
 ## **Hardware Requerido**
