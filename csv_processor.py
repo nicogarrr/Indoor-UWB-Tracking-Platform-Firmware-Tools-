@@ -331,6 +331,50 @@ class UWBDataProcessor:
         return df
 
 
+def select_file_interactive(files, title="Seleccionar archivo"):
+    """
+    Muestra un menú interactivo para seleccionar archivos
+    """
+    if not files:
+        print(f"⚠️  No se encontraron archivos")
+        return None
+    
+    print(f"\n{title}:")
+    print("=" * 50)
+    
+    for i, file_path in enumerate(files, 1):
+        file_name = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path) / 1024  # KB
+        mod_time = os.path.getmtime(file_path)
+        mod_date = datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M")
+        
+        print(f"{i:2d}. {file_name:<40} | {file_size:6.1f}KB | {mod_date}")
+    
+    print(f"\n 0. ❌ Cancelar")
+    
+    while True:
+        try:
+            choice = input(f"\n👆 Selecciona un archivo (1-{len(files)}) o 0 para cancelar: ").strip()
+            
+            if choice == '0':
+                print("❌ Operación cancelada")
+                return None
+            
+            file_idx = int(choice) - 1
+            if 0 <= file_idx < len(files):
+                selected_file = files[file_idx]
+                print(f"✅ Archivo seleccionado: {os.path.basename(selected_file)}")
+                return selected_file
+            else:
+                print(f"⚠️  Número inválido. Ingresa un número entre 1 y {len(files)}")
+                
+        except ValueError:
+            print("⚠️  Por favor ingresa un número válido")
+        except KeyboardInterrupt:
+            print("\n❌ Operación cancelada")
+            return None
+
+
 def main():
     """Función principal para ejecutar el procesador"""
     print("🚀 Sistema de Procesamiento de Datos UWB - TFG Fútbol Sala")
@@ -347,12 +391,16 @@ def main():
         print("   Verifica que exista el directorio 'data/' con archivos 'uwb_data_*.csv'")
         return
     
-    # Procesar archivo más reciente como ejemplo
-    latest_file = max(csv_files, key=os.path.getmtime)
-    print(f"\n🔄 Procesando archivo más reciente: {os.path.basename(latest_file)}")
+    # Selección interactiva de archivo
+    selected_file = select_file_interactive(csv_files, "📁 SELECCIONAR ARCHIVO DE DATOS UWB")
+    
+    if selected_file is None:
+        return
+    
+    print(f"\n🔄 Procesando: {os.path.basename(selected_file)}")
     
     # Procesar datos
-    df = processor.load_csv_data(latest_file)
+    df = processor.load_csv_data(selected_file)
     if df is not None:
         df = processor.calculate_distances_to_anchors(df)
         df = processor.filter_outliers_by_anchor(df)
@@ -368,6 +416,26 @@ def main():
         output_file = "processed_data/latest_processed.csv"
         df.to_csv(output_file, index=False)
         print(f"💾 Datos guardados en: {output_file}")
+        
+        # Mostrar estadísticas finales
+        total_distance = 0
+        if len(df) > 1:
+            distances = []
+            for i in range(1, len(df)):
+                dx = df['x'].iloc[i] - df['x'].iloc[i-1]
+                dy = df['y'].iloc[i] - df['y'].iloc[i-1]
+                distances.append(np.sqrt(dx**2 + dy**2))
+            total_distance = sum(distances)
+        
+        duration = (df['timestamp'].iloc[-1] - df['timestamp'].iloc[0]).total_seconds()
+        avg_speed = total_distance / duration if duration > 0 else 0
+        max_speed = df['velocity'].max() if 'velocity' in df.columns else 0
+        
+        print(f"\n📊 ESTADÍSTICAS FINALES:")
+        print(f"   ⏱️  Duración: {duration:.1f} segundos")
+        print(f"   📏 Distancia total: {total_distance:.1f} metros")
+        print(f"   🏃 Velocidad promedio: {avg_speed:.2f} m/s")
+        print(f"   ⚡ Velocidad máxima: {max_speed:.2f} m/s")
 
 
 if __name__ == "__main__":

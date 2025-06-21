@@ -594,13 +594,6 @@ class FutsalReplaySystem:
         # Visitante
         self.ax.plot([40.1, 40.1], [5, 15], 'red', linewidth=3, alpha=0.8)
         
-        # === MESA DE CRONOMETRAJE ===
-        chrono_table = patches.Rectangle((18, -3.5), 4, 1.5, linewidth=2,
-                                       edgecolor='black', facecolor='yellow', alpha=0.8)
-        self.ax.add_patch(chrono_table)
-        self.ax.text(20, -2.75, 'MESA\nCRONOMETRAJE', ha='center', va='center',
-                    fontsize=7, fontweight='bold', color='black')
-        
         # === ZONAS DE ANÁLISIS DEPORTIVO (sutiles) ===
         # Zona defensiva local
         defense_local = patches.Rectangle((0, 0), 13.33, 20, linewidth=0,
@@ -691,14 +684,8 @@ class FutsalReplaySystem:
                                             alpha=0.3, zorder=12)
         self.ax.add_patch(self.speed_indicator)
         
-        # Flecha de dirección
-        self.direction_arrow = patches.FancyArrowPatch((0, 0), (0, 0),
-                                                     arrowstyle='->', mutation_scale=20,
-                                                     color='red', linewidth=3, alpha=0.8, zorder=13)
-        self.ax.add_patch(self.direction_arrow)
-        
         # === ZONA ACTUAL ===
-        self.current_zone = self.ax.text(20, -3.5, '', ha='center', va='center',
+        self.current_zone = self.ax.text(20, -1.8, '', ha='center', va='center',
                                        fontsize=14, color='white', fontweight='bold',
                                        bbox=dict(boxstyle='round,pad=0.8', 
                                                facecolor='black', alpha=0.9,
@@ -830,23 +817,6 @@ class FutsalReplaySystem:
         self.speed_indicator.center = (x, y)
         self.speed_indicator.radius = speed_radius
         
-        # === FLECHA DE DIRECCIÓN ===
-        if frame_idx > 0:
-            prev_data = self.df.iloc[frame_idx - 1]
-            dx = x - prev_data['x']
-            dy = y - prev_data['y']
-            
-            # Solo mostrar flecha si hay movimiento significativo
-            if speed > 0.5:  # m/s
-                arrow_length = min(2.0, speed * 0.3)
-                end_x = x + dx/abs(dx + 0.001) * arrow_length if abs(dx) > 0.1 else x
-                end_y = y + dy/abs(dy + 0.001) * arrow_length if abs(dy) > 0.1 else y
-                
-                self.direction_arrow.set_positions((x, y), (end_x, end_y))
-                self.direction_arrow.set_alpha(min(0.8, speed / 5.0))  # Más opaca = más velocidad
-            else:
-                self.direction_arrow.set_alpha(0)  # Ocultar si no hay movimiento
-        
         # === ZONA ACTUAL ===
         zone = self.get_player_zone(x, y)
         self.current_zone.set_text(zone)
@@ -923,7 +893,7 @@ class FutsalReplaySystem:
         
         return [self.player_dot, self.player_number, self.trail_line, self.trail_shadow, 
                 self.trail_dots, self.current_zone, self.stats_panel, 
-                self.speed_indicator, self.direction_arrow]
+                self.speed_indicator]
     
     def animate(self, frame):
         """Función de animación principal"""
@@ -1079,6 +1049,65 @@ def generate_movement_report(csv_file):
     print(f"🔄 Frecuencia de muestreo: ~{len(df)/total_time:.1f} Hz")
     print("═" * 50)
 
+def select_replay_file_interactive():
+    """
+    Selección interactiva de archivos para replay
+    """
+    import os
+    import glob
+    from datetime import datetime
+    
+    # Buscar archivos en data/ y processed_data/
+    data_files = glob.glob("data/*.csv")
+    processed_files = glob.glob("processed_data/*.csv")
+    
+    all_files = []
+    if data_files:
+        all_files.extend(data_files)
+    if processed_files:
+        all_files.extend(processed_files)
+    
+    if not all_files:
+        print("❌ No se encontraron archivos CSV en data/ o processed_data/")
+        return None
+    
+    print("\n🎬 SELECCIONAR ARCHIVO PARA REPLAY:")
+    print("=" * 60)
+    
+    for i, file_path in enumerate(all_files, 1):
+        file_name = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path) / 1024  # KB
+        mod_time = os.path.getmtime(file_path)
+        mod_date = datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M")
+        folder = "📁 data/" if file_path.startswith("data/") else "📊 processed_data/"
+        
+        print(f"{i:2d}. {folder}{file_name:<35} | {file_size:6.1f}KB | {mod_date}")
+    
+    print(f"\n 0. ❌ Cancelar")
+    
+    while True:
+        try:
+            choice = input(f"\n👆 Selecciona un archivo (1-{len(all_files)}) o 0 para cancelar: ").strip()
+            
+            if choice == '0':
+                print("❌ Operación cancelada")
+                return None
+            
+            file_idx = int(choice) - 1
+            if 0 <= file_idx < len(all_files):
+                selected_file = all_files[file_idx]
+                print(f"✅ Archivo seleccionado: {selected_file}")
+                return selected_file
+            else:
+                print(f"⚠️  Número inválido. Ingresa un número entre 1 y {len(all_files)}")
+                
+        except ValueError:
+            print("⚠️  Por favor ingresa un número válido")
+        except KeyboardInterrupt:
+            print("\n❌ Operación cancelada")
+            return None
+
+
 def main():
     """Función principal"""
     parser = argparse.ArgumentParser(
@@ -1086,41 +1115,42 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ejemplos de uso:
-  python movement_replay.py                                    # Usar archivo por defecto
+  python movement_replay.py                                    # Selección interactiva
   python movement_replay.py data/mi_partido.csv               # Archivo específico
   python movement_replay.py --report data/mi_partido.csv      # Solo mostrar reporte
         """
     )
     
     parser.add_argument('csv_file', nargs='?', 
-                       default='data/uwb_data_futsal_game_20250621_160000.csv',
-                       help='Archivo CSV con datos de movimiento')
+                       help='Archivo CSV con datos de movimiento (opcional - si no se especifica, selección interactiva)')
     parser.add_argument('--report', action='store_true',
                        help='Mostrar solo reporte de análisis sin replay')
     
     args = parser.parse_args()
     
-    # Verificar si el archivo existe
-    import os
-    if not os.path.exists(args.csv_file):
-        print(f"❌ Error: No se encontró el archivo '{args.csv_file}'")
-        print("💡 Archivos disponibles en data/:")
-        if os.path.exists('data'):
-            for file in os.listdir('data'):
-                if file.endswith('.csv'):
-                    print(f"   📄 {file}")
-        sys.exit(1)
+    # Selección de archivo
+    if args.csv_file:
+        # Archivo especificado por parámetro
+        if not os.path.exists(args.csv_file):
+            print(f"❌ Error: No se encontró el archivo '{args.csv_file}'")
+            return
+        selected_file = args.csv_file
+    else:
+        # Selección interactiva
+        selected_file = select_replay_file_interactive()
+        if selected_file is None:
+            return
     
     try:
         if args.report:
             # Solo mostrar reporte
-            generate_movement_report(args.csv_file)
+            generate_movement_report(selected_file)
         else:
             # Mostrar reporte y ejecutar replay
-            generate_movement_report(args.csv_file)
+            generate_movement_report(selected_file)
             
             # Iniciar sistema de replay
-            replay_system = FutsalReplaySystem(args.csv_file)
+            replay_system = FutsalReplaySystem(selected_file)
             replay_system.start_replay()
             
     except KeyboardInterrupt:
