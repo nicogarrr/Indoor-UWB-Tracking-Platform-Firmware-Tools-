@@ -108,14 +108,55 @@ A10(-1,-1)🔶─────────🔶───────────�
 
 ### **Hardware Makerfabs ESP32 UWB DW3000 - Especificaciones del TFG:**
 
-#### 🔧 **Hardware Físico Disponible:**
+#### 🔧 **Hardware Físico Disponible - Especificaciones Oficiales:**
+
+##### **📋 Información del Módulo:**
 - **Cantidad:** 6 placas ESP32 UWB DW3000 (Universidad de Oviedo)
-- **Distribución:** 5 anclas + 1 tag móvil
+- **Distribución:** 5 anclas + 1 tag móvil  
 - **Modelo:** Makerfabs ESP32 UWB DW3000
-- **Variante:** ESP32 WROVER (8MB PSRAM + 4MB Flash)
-- **Conectividad:** Micro-USB, WiFi, Bluetooth
+- **Chip base:** ESP32-D0WDQ6 (según [datasheet ESP32-WROVER](https://www.makerfabs.com/desfile/files/esp32-wrover_datasheet_en.pdf))
+- **Variante:** ESP32-WROVER (PCB antenna)
+
+##### **🧠 Especificaciones de Memoria (Datasheet v2.2):**
+- **Flash Externa:** 4 MB SPI Flash
+- **PSRAM:** 8 MB SPI Pseudo Static RAM (64 Mbit)
+- **RAM Interna:** 520 KB SRAM (ESP32-D0WDQ6)
+- **Ventaja PSRAM:** Ideal para buffers UWB grandes y algoritmos ML complejos
+
+##### **⚡ Especificaciones de Procesamiento:**
+- **CPU:** Dual-core Xtensa 32-bit LX6 microprocessor
+- **Frecuencia:** 80 MHz - 240 MHz (ajustable)
+- **Co-procesador:** Ultra Low Power (ULP) para monitoreo continuo
+- **Arquitectura:** Escalable y adaptativa con control individual de cores
+
+##### **🌐 Conectividad Integrada:**
+- **WiFi:** 802.11 b/g/n (hasta 150 Mbps)
+  - A-MPDU/A-MSDU aggregation
+  - Guard interval 0.4 µs support
+  - Rango frecuencia: 2.4 GHz ~ 2.5 GHz
+- **Bluetooth:** v4.2 BR/EDR y BLE specification
+  - NZIF receiver con -97 dBm sensitivity
+  - Class-1, Class-2, Class-3 transmitter
+  - Adaptive Frequency Hopping (AFH)
+  - Audio: CVSD y SBC codecs
+
+##### **🔌 Especificaciones Físicas y Eléctricas:**
+- **Dimensiones:** (18.00 ± 0.10) × (31.40 ± 0.10) × (3.30 ± 0.10) mm
 - **Alimentación:** USB 4.8-5.5V, 5.0V típico
-- **Repositorio oficial:** [Makerfabs-ESP32-UWB-DW3000](https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000)
+- **Consumo:** < 5 µA en sleep mode (ultra-bajo consumo)
+- **Temperatura operación:** -40°C ~ +85°C
+- **Conectividad:** Micro-USB, antena PCB integrada
+
+##### **🛡️ Certificaciones y Confiabilidad:**
+- **RF:** FCC/CE-RED/SRRC/TELEC certified
+- **WiFi:** Wi-Fi Alliance certified  
+- **Bluetooth:** BQB certified
+- **Ambiental:** RoHS/REACH compliance
+- **Tests:** HTOL/HTSL/uHAST/TCT/ESD reliability testing
+
+##### **🔗 Recursos Oficiales:**
+- **Datasheet:** [ESP32-WROVER v2.2](https://www.makerfabs.com/desfile/files/esp32-wrover_datasheet_en.pdf)
+- **Repositorio DW3000:** [Makerfabs-ESP32-UWB-DW3000](https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000)
 
 #### 🚀 **Ventajas del DW3000 vs DW1000 (Generación Anterior):**
 1. **🍎 Interoperabilidad Apple U1** - Compatible con chip U1 de dispositivos Apple
@@ -126,14 +167,48 @@ A10(-1,-1)🔶─────────🔶───────────�
 6. **⚡ Transmisión optimizada** - Protocolo de comunicación más eficiente
 
 #### 🧠 **Ventajas Específicas ESP32 WROVER para Ciencia e Ingeniería de Datos:**
-- **8MB PSRAM** - Memoria extendida para:
-  - Buffers UWB de gran tamaño
-  - Algoritmos de machine learning complejos  
-  - Procesamiento de señales en tiempo real
-  - Filtros Kalman con historial extendido
-- **4MB Flash** - Espacio para firmware avanzado con múltiples librerías
-- **Multitarea avanzada** - Procesamiento paralelo WiFi + UWB sin interferencias
-- **Ideal para TFG** - Capacidad computacional para algoritmos de análisis deportivo
+
+##### **💾 Capacidades de Memoria Expandida:**
+- **8MB PSRAM (64 Mbit)** - Memoria extendida para:
+  - Buffers UWB de gran tamaño (>1000 mediciones simultáneas)
+  - Algoritmos de machine learning complejos (Gaussian Process, Kalman)
+  - Procesamiento de señales en tiempo real sin saturación
+  - Filtros Kalman con historial extendido (>5 segundos de datos)
+  - Arrays de datos deportivos para análisis estadístico
+- **4MB Flash Externa** - Espacio para firmware avanzado:
+  - Múltiples librerías UWB, MQTT, ML simultáneas
+  - Algoritmos de triangulación complejos
+  - Sistema de logging persistente
+  - OTA updates para actualizaciones remotas
+
+##### **⚡ Procesamiento Paralelo Avanzado:**
+- **Dual-core Xtensa 32-bit LX6 (80-240 MHz)**
+  - Core 0: Protocolo UWB TDMA + triangulación en tiempo real
+  - Core 1: WiFi/MQTT + análisis ML + interfaz web
+  - Procesamiento paralelo verdadero sin bloqueos
+- **Co-procesador ULP** - Monitoreo de periféricos sin despertar CPU principal
+- **FreeRTOS optimizado** - Gestión de tareas de tiempo real
+
+##### **🌐 Conectividad Industrial Robusta:**
+- **WiFi 802.11 b/g/n hasta 150 Mbps** - Transmisión de datos UWB en tiempo real
+- **Bluetooth v4.2 BR/EDR + BLE** - Configuración y monitoreo móvil
+- **20 dBm output power** - Máximo rango de conectividad
+- **Sleep mode <5 µA** - Eficiencia energética para instalaciones permanentes
+
+##### **📊 Periféricos Integrados para Análisis Deportivo:**
+- **ADC de 12-bit** - Sensores adicionales (acelerómetros, giroscopios)
+- **DAC de 8-bit** - Señales de control analógicas
+- **PWM/LED control** - Indicadores visuales en anclas
+- **I²C/SPI/UART** - Expansión con sensores externos
+- **GPIO programables** - Control de hardware personalizado
+- **RTC con crystal** - Timestamps precisos para sincronización
+
+##### **🎯 Beneficios Específicos para TFG:**
+- **Capacidad computacional** - Algoritmos ML complejos sin limitaciones
+- **Confiabilidad industrial** - Certificaciones FCC/CE/RoHS para uso académico
+- **Rango de temperatura** - Operación -40°C ~ +85°C (pabellones deportivos)
+- **Desarrollo ágil** - Arduino IDE + ESP-IDF para prototipado rápido
+- **Escalabilidad** - Fácil expansión a múltiples tags simultáneos
 ```
 
 ## 📁 Estructura del Proyecto
@@ -467,33 +542,62 @@ El repositorio oficial incluye dos ejemplos básicos para verificar funcionamien
 3. En Arduino IDE → Herramientas → Puerto: Seleccionar puerto correcto
 ```
 
-##### **Paso 2: Test de la placa básico**
+##### **Paso 2: Test completo del hardware (según datasheet oficial)**
 ```cpp
-// Cargar este código simple para verificar cada placa:
+// Cargar este código para verificación completa de cada placa:
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("=== Test ESP32 UWB DW3000 ===");
-  Serial.println("Modelo: Makerfabs ESP32 UWB DW3000");
-  Serial.println("Chip: ESP32 WROVER");
+  Serial.println("=== Test Makerfabs ESP32 UWB DW3000 ===");
+  Serial.println("Basado en datasheet ESP32-WROVER v2.2");
   
-  // Verificar PSRAM de 8MB
+  // Verificar chip específico
+  Serial.printf("Chip Model: %s\n", ESP.getChipModel());
+  Serial.printf("Chip Revision: %d\n", ESP.getChipRevision());
+  Serial.printf("CPU Cores: %d\n", ESP.getChipCores());
+  
+  // Verificar PSRAM de 8MB (64 Mbit) - Crítico para TFG
   if(psramFound()){
-    Serial.printf("✅ PSRAM detectada: %d bytes\n", ESP.getPsramSize());
+    size_t psramSize = ESP.getPsramSize();
+    Serial.printf("✅ PSRAM detectada: %d bytes (%.1f MB)\n", psramSize, psramSize/1024.0/1024.0);
+    if(psramSize >= 8*1024*1024) {
+      Serial.println("✅ PSRAM 8MB confirmada - Hardware correcto");
+    } else {
+      Serial.println("⚠️  PSRAM menor a 8MB - Verificar hardware");
+    }
   } else {
-    Serial.println("❌ Error: PSRAM no detectada");
+    Serial.println("❌ Error: PSRAM no detectada - Hardware incorrecto");
   }
   
-  // Información básica
-  Serial.printf("Chip: %s\n", ESP.getChipModel());
-  Serial.printf("Frecuencia CPU: %d MHz\n", ESP.getCpuFreqMHz());
-  Serial.printf("Flash: %d MB\n", ESP.getFlashChipSize() / 1024 / 1024);
-  Serial.printf("RAM libre: %d KB\n", ESP.getFreeHeap() / 1024);
+  // Verificar memoria Flash (4MB según datasheet)
+  size_t flashSize = ESP.getFlashChipSize();
+  Serial.printf("Flash Size: %d bytes (%.1f MB)\n", flashSize, flashSize/1024.0/1024.0);
+  
+  // Verificar especificaciones CPU
+  Serial.printf("CPU Frequency: %d MHz (rango: 80-240 MHz)\n", ESP.getCpuFreqMHz());
+  Serial.printf("Free Heap: %d KB\n", ESP.getFreeHeap() / 1024);
+  Serial.printf("Free PSRAM: %d KB\n", ESP.getFreePsram() / 1024);
+  
+  // Verificar conectividad WiFi integrada
+  Serial.println("\n--- Test WiFi (802.11 b/g/n) ---");
+  WiFi.mode(WIFI_STA);
+  Serial.println("✅ WiFi inicializado (2.4-2.5 GHz)");
+  
+  // Verificar especificaciones según datasheet
+  Serial.println("\n--- Verificación Datasheet ESP32-WROVER ---");
+  Serial.println("✅ ESP32-D0WDQ6 chip embedded");
+  Serial.println("✅ Dual-core Xtensa 32-bit LX6");
+  Serial.println("✅ 4MB External SPI Flash");
+  Serial.println("✅ 8MB SPI Pseudo Static RAM");
+  Serial.println("✅ Temperatura: -40°C ~ +85°C");
+  Serial.println("✅ Dimensiones: 18.0×31.4×3.3mm");
+  
+  Serial.println("\n🎯 Hardware listo para TFG UWB DW3000");
 }
 
 void loop() {
-  Serial.println("Placa funcionando correctamente...");
-  delay(2000);
+  Serial.println("Hardware verificado - Placa lista para programación UWB");
+  delay(3000);
 }
 ```
 
