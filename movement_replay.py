@@ -436,23 +436,25 @@ class FutsalReplaySystem:
     def setup_plot(self):
         """Configurar la visualización de la cancha"""
         # Crear figura con tamaño optimizado
-        self.fig, self.ax = plt.subplots(figsize=(16, 10))
+        self.fig, self.ax = plt.subplots(figsize=(18, 12))
         
         # Verificar si el manager existe antes de intentar establecer el título
         try:
             if hasattr(self.fig.canvas, 'manager') and self.fig.canvas.manager is not None:
-                self.fig.canvas.manager.set_window_title('🏟️ Sistema de Replay UWB - Fútbol Sala')
+                self.fig.canvas.manager.set_window_title('🏟️ Sistema de Replay UWB - Fútbol Sala Profesional')
         except:
             pass  # Ignorar si no se puede establecer el título
         
-        # Configurar cancha de fútbol sala (40x20m)
-        self.ax.set_xlim(-3, 43)
-        self.ax.set_ylim(-3, 23)
+        # Configurar cancha de fútbol sala (40x20m) con márgenes para anclas
+        self.ax.set_xlim(-4, 44)
+        self.ax.set_ylim(-4, 24)
         self.ax.set_aspect('equal')
-        self.ax.set_facecolor('#2d5016')  # Verde césped
         
-        # Dibujar líneas de la cancha
-        self.draw_futsal_court()
+        # Color de fondo - Pabellón deportivo
+        self.ax.set_facecolor('#1a1a2e')  # Azul oscuro pabellón
+        
+        # Dibujar fondo de la cancha con degradado
+        self.draw_futsal_court_professional()
         
         # Dibujar anclas UWB
         self.draw_uwb_anchors()
@@ -463,114 +465,247 @@ class FutsalReplaySystem:
         # Panel de información
         self.setup_info_panel()
     
-    def draw_futsal_court(self):
-        """Dibujar las líneas oficiales de fútbol sala"""
-        # Perímetro de la cancha (40x20m)
-        court = patches.Rectangle((0, 0), 40, 20, linewidth=3, 
+    def draw_futsal_court_professional(self):
+        """Dibujar cancha de fútbol sala profesional con todos los elementos reglamentarios"""
+        
+        # === SUPERFICIE DE JUEGO ===
+        # Fondo principal de la cancha (parquet/cemento pulido)
+        court_surface = patches.Rectangle((0, 0), 40, 20, linewidth=0,
+                                        facecolor='#8B7355', alpha=0.9)  # Color parquet
+        self.ax.add_patch(court_surface)
+        
+        # Efecto de brillo en el centro (como parquet pulido)
+        center_shine = patches.Ellipse((20, 10), 25, 12, linewidth=0,
+                                     facecolor='#A0926B', alpha=0.3)
+        self.ax.add_patch(center_shine)
+        
+        # === LÍNEAS REGLAMENTARIAS ===
+        # Perímetro de la cancha (40x20m) - Línea más gruesa
+        court = patches.Rectangle((0, 0), 40, 20, linewidth=4, 
                                 edgecolor='white', facecolor='none')
         self.ax.add_patch(court)
         
         # Línea central
-        self.ax.plot([20, 20], [0, 20], 'white', linewidth=2)
+        self.ax.plot([20, 20], [0, 20], 'white', linewidth=3)
         
-        # Círculo central (radio 3m)
-        center_circle = patches.Circle((20, 10), 3, linewidth=2, 
+        # Círculo central (radio 3m) - FIFA
+        center_circle = patches.Circle((20, 10), 3, linewidth=3, 
                                      edgecolor='white', facecolor='none')
         self.ax.add_patch(center_circle)
         
-        # Áreas de penalti (semicírculo radio 6m)
-        # Área izquierda
-        penalty_left = patches.Wedge((0, 10), 6, -90, 90, linewidth=2,
+        # Punto central
+        self.ax.plot(20, 10, 'wo', markersize=8)
+        
+        # === ÁREAS DE PORTERÍA ===
+        # Área de portería izquierda (semicírculo 6m)
+        penalty_left = patches.Wedge((0, 10), 6, -90, 90, linewidth=3,
                                    edgecolor='white', facecolor='none')
         self.ax.add_patch(penalty_left)
         
-        # Área derecha  
-        penalty_right = patches.Wedge((40, 10), 6, 90, 270, linewidth=2,
+        # Área de portería derecha
+        penalty_right = patches.Wedge((40, 10), 6, 90, 270, linewidth=3,
                                     edgecolor='white', facecolor='none')
         self.ax.add_patch(penalty_right)
         
-        # Porterías (3x2m)
-        # Portería izquierda
-        self.ax.plot([0, 0], [9, 11], 'white', linewidth=4)
-        goal_left = patches.Rectangle((-0.5, 9), 0.5, 2, linewidth=2,
-                                    edgecolor='white', facecolor='lightgray')
-        self.ax.add_patch(goal_left)
+        # === PORTERÍAS PROFESIONALES ===
+        # Portería izquierda (3x2m) - Estructura 3D
+        # Postes
+        self.ax.plot([0, 0], [8.5, 11.5], 'white', linewidth=6)  # Poste más realista
         
-        # Portería derecha
-        self.ax.plot([40, 40], [9, 11], 'white', linewidth=4)
-        goal_right = patches.Rectangle((40, 9), 0.5, 2, linewidth=2,
-                                     edgecolor='white', facecolor='lightgray')
-        self.ax.add_patch(goal_right)
+        # Estructura de la portería (efecto 3D)
+        goal_left_back = patches.Rectangle((-1.2, 8.5), 1.2, 3, linewidth=2,
+                                         edgecolor='silver', facecolor='#f0f0f0', alpha=0.8)
+        self.ax.add_patch(goal_left_back)
         
-        # Puntos de penalti
-        self.ax.plot(6, 10, 'wo', markersize=8)
-        self.ax.plot(34, 10, 'wo', markersize=8)
+        # Red (efecto visual)
+        for i in range(9, 12):
+            self.ax.plot([-1.2, 0], [i, i], 'gray', linewidth=0.5, alpha=0.6)
+        for i in range(-12, 1, 2):
+            self.ax.plot([i/10, i/10], [8.5, 11.5], 'gray', linewidth=0.5, alpha=0.6)
         
-        # Esquinas (cuarto de círculo radio 25cm)
+        # Portería derecha (3x2m)
+        self.ax.plot([40, 40], [8.5, 11.5], 'white', linewidth=6)
+        
+        goal_right_back = patches.Rectangle((40, 8.5), 1.2, 3, linewidth=2,
+                                          edgecolor='silver', facecolor='#f0f0f0', alpha=0.8)
+        self.ax.add_patch(goal_right_back)
+        
+        # Red portería derecha
+        for i in range(9, 12):
+            self.ax.plot([40, 41.2], [i, i], 'gray', linewidth=0.5, alpha=0.6)
+        for i in range(0, 13, 2):
+            self.ax.plot([40 + i/10, 40 + i/10], [8.5, 11.5], 'gray', linewidth=0.5, alpha=0.6)
+        
+        # === PUNTOS DE PENALTI ===
+        # Punto de penalti 6 metros
+        self.ax.plot(6, 10, 'wo', markersize=10)
+        self.ax.plot(34, 10, 'wo', markersize=10)
+        
+        # Punto de doble penalti 10 metros
+        self.ax.plot(10, 10, 'wo', markersize=8)
+        self.ax.plot(30, 10, 'wo', markersize=8)
+        
+        # === ESQUINAS REGLAMENTARIAS ===
+        # Cuartos de círculo radio 25cm (FIFA)
         corners = [(0, 0), (0, 20), (40, 0), (40, 20)]
         for x, y in corners:
             if x == 0 and y == 0:  # Esquina inferior izquierda
-                corner = patches.Wedge((x, y), 0.25, 0, 90, linewidth=1,
+                corner = patches.Wedge((x, y), 0.25, 0, 90, linewidth=2,
                                      edgecolor='white', facecolor='none')
             elif x == 0 and y == 20:  # Esquina superior izquierda
-                corner = patches.Wedge((x, y), 0.25, 270, 360, linewidth=1,
+                corner = patches.Wedge((x, y), 0.25, 270, 360, linewidth=2,
                                      edgecolor='white', facecolor='none')
             elif x == 40 and y == 0:  # Esquina inferior derecha
-                corner = patches.Wedge((x, y), 0.25, 90, 180, linewidth=1,
+                corner = patches.Wedge((x, y), 0.25, 90, 180, linewidth=2,
                                      edgecolor='white', facecolor='none')
             else:  # Esquina superior derecha
-                corner = patches.Wedge((x, y), 0.25, 180, 270, linewidth=1,
+                corner = patches.Wedge((x, y), 0.25, 180, 270, linewidth=2,
                                      edgecolor='white', facecolor='none')
             self.ax.add_patch(corner)
+        
+        # === ELEMENTOS ADICIONALES FÚTBOL SALA ===
+        
+        # Línea de saque (línea discontinua a 3m de cada portería)
+        # Izquierda
+        for i in range(3, 18, 2):
+            self.ax.plot([3, 3], [i, i+0.8], 'white', linewidth=1.5, alpha=0.7)
+        # Derecha  
+        for i in range(3, 18, 2):
+            self.ax.plot([37, 37], [i, i+0.8], 'white', linewidth=1.5, alpha=0.7)
+        
+        # === BANQUILLOS Y ÁREA TÉCNICA ===
+        # Banquillo equipo local (lado izquierdo)
+        bench_local = patches.Rectangle((-3.5, 7), 2.5, 6, linewidth=2,
+                                      edgecolor='blue', facecolor='lightblue', alpha=0.7)
+        self.ax.add_patch(bench_local)
+        self.ax.text(-2.25, 10, 'EQUIPO\nLOCAL', ha='center', va='center',
+                    fontsize=8, fontweight='bold', color='darkblue')
+        
+        # Banquillo equipo visitante (lado derecho)
+        bench_visit = patches.Rectangle((41, 7), 2.5, 6, linewidth=2,
+                                      edgecolor='red', facecolor='lightcoral', alpha=0.7)
+        self.ax.add_patch(bench_visit)
+        self.ax.text(42.25, 10, 'EQUIPO\nVISITANTE', ha='center', va='center',
+                    fontsize=8, fontweight='bold', color='darkred')
+        
+        # Área técnica (línea de banda)
+        # Local
+        self.ax.plot([-0.1, -0.1], [5, 15], 'blue', linewidth=3, alpha=0.8)
+        # Visitante
+        self.ax.plot([40.1, 40.1], [5, 15], 'red', linewidth=3, alpha=0.8)
+        
+        # === MESA DE CRONOMETRAJE ===
+        chrono_table = patches.Rectangle((18, -3.5), 4, 1.5, linewidth=2,
+                                       edgecolor='black', facecolor='yellow', alpha=0.8)
+        self.ax.add_patch(chrono_table)
+        self.ax.text(20, -2.75, 'MESA\nCRONOMETRAJE', ha='center', va='center',
+                    fontsize=7, fontweight='bold', color='black')
+        
+        # === ZONAS DE ANÁLISIS DEPORTIVO (sutiles) ===
+        # Zona defensiva local
+        defense_local = patches.Rectangle((0, 0), 13.33, 20, linewidth=0,
+                                        facecolor='lightblue', alpha=0.1)
+        self.ax.add_patch(defense_local)
+        
+        # Zona media
+        middle_zone = patches.Rectangle((13.33, 0), 13.34, 20, linewidth=0,
+                                      facecolor='yellow', alpha=0.1)
+        self.ax.add_patch(middle_zone)
+        
+        # Zona ofensiva
+        offense_zone = patches.Rectangle((26.67, 0), 13.33, 20, linewidth=0,
+                                       facecolor='lightcoral', alpha=0.1)
+        self.ax.add_patch(offense_zone)
+        
+        # === ILUMINACIÓN DEL PABELLÓN (efecto) ===
+        # Focos principales (4 esquinas)
+        spotlight_positions = [(-2, -2), (-2, 22), (42, -2), (42, 22)]
+        for x, y in spotlight_positions:
+            spotlight = patches.Circle((x, y), 0.8, linewidth=2,
+                                     edgecolor='yellow', facecolor='lightyellow', alpha=0.6)
+            self.ax.add_patch(spotlight)
     
     def draw_uwb_anchors(self):
-        """Dibujar posiciones de anclas UWB optimizadas"""
+        """Dibujar posiciones de anclas UWB con diseño mejorado"""
         anchors = {
-            'A10': (-1, -1, 'red'),     # Esquina Suroeste
-            'A20': (-1, 21, 'blue'),    # Esquina Noroeste  
-            'A30': (41, -1, 'green'),   # Esquina Sureste
-            'A40': (41, 21, 'orange'),  # Esquina Noreste
-            'A50': (20, -1, 'purple')   # Centro campo Sur
+            'A10': (-1, -1, 'red', '🔴'),        # Esquina Suroeste
+            'A20': (-1, 21, 'blue', '🔵'),       # Esquina Noroeste  
+            'A30': (41, -1, 'green', '🟢'),      # Esquina Sureste
+            'A40': (41, 21, 'orange', '🟠'),     # Esquina Noreste
+            'A50': (20, -1, 'purple', '🟣')      # Centro campo Sur
         }
         
-        for anchor_id, (x, y, color) in anchors.items():
-            # Dibujar ancla
-            self.ax.plot(x, y, 's', color=color, markersize=12, 
-                        markeredgecolor='white', markeredgewidth=2)
+        for anchor_id, (x, y, color, emoji) in anchors.items():
+            # Círculo de cobertura (sutil)
+            coverage = patches.Circle((x, y), 15, linewidth=1,
+                                    edgecolor=color, facecolor='none', 
+                                    alpha=0.2, linestyle='--')
+            self.ax.add_patch(coverage)
             
-            # Etiqueta
-            self.ax.annotate(anchor_id, (x, y), xytext=(5, 5), 
+            # Ancla principal (más grande y visible)
+            self.ax.plot(x, y, 's', color=color, markersize=16, 
+                        markeredgecolor='white', markeredgewidth=3, zorder=15)
+            
+            # Símbolo UWB
+            self.ax.plot(x, y, marker='*', color='white', markersize=8, zorder=16)
+            
+            # Etiqueta mejorada
+            self.ax.annotate(f'{emoji} {anchor_id}', (x, y), xytext=(8, 8), 
                            textcoords='offset points', color='white',
-                           fontsize=10, fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.3', 
-                                   facecolor=color, alpha=0.8))
+                           fontsize=11, fontweight='bold', zorder=17,
+                           bbox=dict(boxstyle='round,pad=0.5', 
+                                   facecolor=color, alpha=0.9,
+                                   edgecolor='white', linewidth=1))
     
     def setup_dynamic_elements(self):
         """Configurar elementos que cambian durante la animación"""
-        # Jugador (tag)
-        self.player_dot, = self.ax.plot([], [], 'yo', markersize=15, 
-                                       markeredgecolor='red', markeredgewidth=2,
-                                       label='Jugador', zorder=10)
+        # === JUGADOR PRINCIPAL ===
+        # Jugador con diseño mejorado (camiseta + número)
+        self.player_dot, = self.ax.plot([], [], 'o', color='#FFD700', markersize=18, 
+                                       markeredgecolor='#FF4500', markeredgewidth=3,
+                                       label='Jugador', zorder=20)
         
-        # Trayectoria (últimos N puntos)
-        self.trail_length = 100  # Mostrar últimos 100 puntos
-        self.trail_line, = self.ax.plot([], [], 'r-', alpha=0.6, linewidth=2,
-                                       label='Trayectoria')
+        # Número del jugador
+        self.player_number = self.ax.text(0, 0, '7', ha='center', va='center',
+                                        fontsize=10, fontweight='bold', color='white', zorder=21)
         
-        # Puntos de trayectoria con degradado
-        self.trail_dots, = self.ax.plot([], [], 'ro', alpha=0.3, markersize=3)
+        # === TRAYECTORIA AVANZADA ===
+        self.trail_length = 150  # Más puntos para mejor visualización
         
-        # Zona actual del jugador
-        self.current_zone = self.ax.text(20, -2, '', ha='center', va='center',
-                                       fontsize=12, color='white', fontweight='bold',
-                                       bbox=dict(boxstyle='round,pad=0.5', 
-                                               facecolor='black', alpha=0.8))
+        # Trayectoria principal con degradado
+        self.trail_line, = self.ax.plot([], [], '-', color='#FF6B35', alpha=0.8, linewidth=3,
+                                       label='Trayectoria', zorder=10)
         
-        # Velocidad instantánea
-        self.speed_indicator = patches.Circle((0, 0), 0, linewidth=2,
-                                            edgecolor='cyan', facecolor='none',
-                                            alpha=0.7)
+        # Trayectoria secundaria (sombra)
+        self.trail_shadow, = self.ax.plot([], [], '-', color='black', alpha=0.3, linewidth=5,
+                                         zorder=9)
+        
+        # Puntos de trayectoria con tamaño variable
+        self.trail_dots, = self.ax.plot([], [], 'o', color='#FF8C42', alpha=0.4, markersize=4,
+                                       zorder=11)
+        
+        # === INDICADORES DE VELOCIDAD ===
+        # Círculo de velocidad (radio proporcional)
+        self.speed_indicator = patches.Circle((0, 0), 0, linewidth=3,
+                                            edgecolor='cyan', facecolor='cyan',
+                                            alpha=0.3, zorder=12)
         self.ax.add_patch(self.speed_indicator)
+        
+        # Flecha de dirección
+        self.direction_arrow = patches.FancyArrowPatch((0, 0), (0, 0),
+                                                     arrowstyle='->', mutation_scale=20,
+                                                     color='red', linewidth=3, alpha=0.8, zorder=13)
+        self.ax.add_patch(self.direction_arrow)
+        
+        # === ZONA ACTUAL ===
+        self.current_zone = self.ax.text(20, -3.5, '', ha='center', va='center',
+                                       fontsize=14, color='white', fontweight='bold',
+                                       bbox=dict(boxstyle='round,pad=0.8', 
+                                               facecolor='black', alpha=0.9,
+                                               edgecolor='yellow', linewidth=2))
+        
+        # === MAPA DE CALOR (básico) ===
+        self.heat_positions = []  # Para almacenar posiciones para mapa de calor
         
     def setup_info_panel(self):
         """Configurar panel de información en tiempo real"""
@@ -607,22 +742,28 @@ class FutsalReplaySystem:
         self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
         
     def get_player_zone(self, x, y):
-        """Determinar la zona actual del jugador"""
-        # Portería izquierda
-        if x <= 6 and 7 <= y <= 13:
-            return "🥅 ÁREA PORTERÍA IZQUIERDA"
-        # Portería derecha  
-        elif x >= 34 and 7 <= y <= 13:
-            return "🥅 ÁREA PORTERÍA DERECHA"
-        # Centro campo
+        """Determinar la zona actual del jugador con zonas más específicas"""
+        # Portería izquierda (área de 6m)
+        if x <= 6 and 4 <= y <= 16:
+            return "🥅 ÁREA PORTERÍA LOCAL"
+        # Portería derecha (área de 6m)
+        elif x >= 34 and 4 <= y <= 16:
+            return "🥅 ÁREA PORTERÍA VISITANTE"
+        # Círculo central
         elif 17 <= x <= 23 and 7 <= y <= 13:
-            return "⚽ CENTRO CAMPO"
-        # Medio campo izquierdo
-        elif x <= 20:
-            return "👈 MEDIO CAMPO IZQUIERDO"
-        # Medio campo derecho
-        elif x > 20:
-            return "👉 MEDIO CAMPO DERECHO"
+            return "⚽ CÍRCULO CENTRAL"
+        # Zona defensiva local
+        elif x <= 13.33:
+            return "🛡️ ZONA DEFENSIVA LOCAL"
+        # Zona media
+        elif 13.33 < x <= 26.67:
+            return "⚔️ ZONA MEDIA"
+        # Zona ofensiva
+        elif x > 26.67:
+            return "⚡ ZONA OFENSIVA"
+        # Fuera de banda
+        elif x < 0 or x > 40 or y < 0 or y > 20:
+            return "🚫 FUERA DE JUEGO"
         else:
             return "🏃 EN JUEGO"
     
@@ -660,48 +801,129 @@ class FutsalReplaySystem:
         x, y = current_data['x'], current_data['y']
         timestamp = current_data['timestamp']
         
-        # Actualizar posición del jugador
+        # === ACTUALIZAR JUGADOR ===
+        # Posición del jugador
         self.player_dot.set_data([x], [y])
         
-        # Actualizar trayectoria
+        # Número del jugador (sigue al jugador)
+        self.player_number.set_position((x, y))
+        
+        # === ACTUALIZAR TRAYECTORIA ===
         start_idx = max(0, frame_idx - self.trail_length)
         trail_data = self.df.iloc[start_idx:frame_idx + 1]
         
         if len(trail_data) > 1:
+            # Trayectoria principal
             self.trail_line.set_data(trail_data['x'], trail_data['y'])
+            
+            # Sombra de la trayectoria
+            self.trail_shadow.set_data(trail_data['x'], trail_data['y'])
+            
+            # Puntos de trayectoria con degradado
             self.trail_dots.set_data(trail_data['x'], trail_data['y'])
         
-        # Calcular velocidad
+        # === CALCULAR VELOCIDAD Y DIRECCIÓN ===
         speed = self.calculate_speed(frame_idx)
         
         # Indicador visual de velocidad (círculo proporcional)
-        speed_radius = min(2.0, speed * 0.5)  # Radio máximo 2m
+        speed_radius = min(3.0, speed * 0.4)  # Radio máximo 3m
         self.speed_indicator.center = (x, y)
         self.speed_indicator.radius = speed_radius
         
-        # Determinar zona actual
+        # === FLECHA DE DIRECCIÓN ===
+        if frame_idx > 0:
+            prev_data = self.df.iloc[frame_idx - 1]
+            dx = x - prev_data['x']
+            dy = y - prev_data['y']
+            
+            # Solo mostrar flecha si hay movimiento significativo
+            if speed > 0.5:  # m/s
+                arrow_length = min(2.0, speed * 0.3)
+                end_x = x + dx/abs(dx + 0.001) * arrow_length if abs(dx) > 0.1 else x
+                end_y = y + dy/abs(dy + 0.001) * arrow_length if abs(dy) > 0.1 else y
+                
+                self.direction_arrow.set_positions((x, y), (end_x, end_y))
+                self.direction_arrow.set_alpha(min(0.8, speed / 5.0))  # Más opaca = más velocidad
+            else:
+                self.direction_arrow.set_alpha(0)  # Ocultar si no hay movimiento
+        
+        # === ZONA ACTUAL ===
         zone = self.get_player_zone(x, y)
         self.current_zone.set_text(zone)
         
-        # Actualizar panel de estadísticas
+        # Cambiar color de la zona según el área
+        if "PORTERÍA" in zone:
+            zone_color = 'red'
+            zone_edge = 'yellow'
+        elif "DEFENSIVA" in zone:
+            zone_color = 'blue'
+            zone_edge = 'lightblue'
+        elif "OFENSIVA" in zone:
+            zone_color = 'orangered'
+            zone_edge = 'orange'
+        elif "CENTRAL" in zone or "MEDIA" in zone:
+            zone_color = 'green'
+            zone_edge = 'lightgreen'
+        else:
+            zone_color = 'black'
+            zone_edge = 'yellow'
+        
+        self.current_zone.set_bbox(dict(boxstyle='round,pad=0.8', 
+                                      facecolor=zone_color, alpha=0.9,
+                                      edgecolor=zone_edge, linewidth=2))
+        
+        # === ALMACENAR PARA MAPA DE CALOR ===
+        self.heat_positions.append((x, y))
+        if len(self.heat_positions) > 1000:  # Mantener últimas 1000 posiciones
+            self.heat_positions.pop(0)
+        
+        # === ESTADÍSTICAS AVANZADAS ===
         elapsed_time = (timestamp - self.df['timestamp'].iloc[0]).total_seconds()
         progress = (frame_idx / self.total_frames) * 100
         
+        # Calcular distancia total hasta ahora
+        if frame_idx > 0:
+            distances = []
+            for i in range(1, frame_idx + 1):
+                curr = self.df.iloc[i]
+                prev = self.df.iloc[i-1]
+                dist = np.sqrt((curr['x'] - prev['x'])**2 + (curr['y'] - prev['y'])**2)
+                distances.append(dist)
+            total_distance = sum(distances)
+        else:
+            total_distance = 0
+        
+        # Clasificación de velocidad
+        if speed < 1.0:
+            speed_class = "🚶 CAMINANDO"
+        elif speed < 3.0:
+            speed_class = "🏃 TROTE"
+        elif speed < 5.0:
+            speed_class = "💨 CARRERA"
+        else:
+            speed_class = "⚡ SPRINT"
+        
         stats_text = (f"⏱️  TIEMPO: {elapsed_time:.1f}s\n"
                      f"📍 POSICIÓN: ({x:.1f}, {y:.1f})m\n"
-                     f"🏃 VELOCIDAD: {speed:.2f} m/s\n"
+                     f"🏃 VELOCIDAD: {speed:.2f} m/s ({speed_class})\n"
+                     f"📏 DIST. TOTAL: {total_distance:.1f}m\n"
                      f"🎯 FRAME: {frame_idx + 1}/{self.total_frames}\n"
                      f"📊 PROGRESO: {progress:.1f}%\n"
-                     f"⚡ VELOCIDAD REPR.: {self.playback_speed:.1f}x")
+                     f"⚡ VEL. REPR.: {self.playback_speed:.1f}x")
         
         self.stats_panel.set_text(stats_text)
         
-        # Actualizar título con timestamp
-        self.ax.set_title(f"🏟️ Replay UWB - Fútbol Sala | {timestamp.strftime('%H:%M:%S.%f')[:-3]} | {'▶️' if self.is_playing else '⏸️'}",
-                         fontsize=14, fontweight='bold', color='white')
+        # === TÍTULO DINÁMICO ===
+        title_color = 'lightgreen' if self.is_playing else 'orange'
+        status_icon = '▶️' if self.is_playing else '⏸️'
         
-        return [self.player_dot, self.trail_line, self.trail_dots, 
-                self.current_zone, self.stats_panel, self.speed_indicator]
+        self.ax.set_title(f"🏟️ Replay UWB - Fútbol Sala Profesional | {timestamp.strftime('%H:%M:%S.%f')[:-3]} | {status_icon}",
+                         fontsize=16, fontweight='bold', color=title_color,
+                         bbox=dict(boxstyle='round,pad=0.5', facecolor='black', alpha=0.8))
+        
+        return [self.player_dot, self.player_number, self.trail_line, self.trail_shadow, 
+                self.trail_dots, self.current_zone, self.stats_panel, 
+                self.speed_indicator, self.direction_arrow]
     
     def animate(self, frame):
         """Función de animación principal"""
