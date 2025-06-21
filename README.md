@@ -85,7 +85,7 @@ A10(-1,-1)🔶─────────🔶───────────�
 - ✅ **Fácil instalación** - Montaje en perímetro del pabellón
 - ✅ **Redundancia** - 5 anclas para mayor precisión
 
-### **Ventajas del Hardware Makerfabs DW3000:**
+### **Ventajas del Hardware Makerfabs DW3000 WROVER:**
 - 🚀 **Tecnología de última generación** - Chip DW3000 vs DW1000 anterior
 - 🔋 **Consumo ultra-eficiente** - 66% menos consumo energético
 - 📱 **Compatible con Apple U1** - Interoperabilidad con dispositivos Apple
@@ -94,6 +94,11 @@ A10(-1,-1)🔶─────────🔶───────────�
 - 🛡️ **Certificación FiRa™** - Estándar industrial para UWB
 - 🔌 **Plug & Play** - No requiere soldadura ni conexiones externas
 - 💻 **Arduino nativo** - Compatible con IDE estándar
+- 🧠 **ESP32 WROVER específico:**
+  - **8MB PSRAM** - Memoria adicional para buffers UWB grandes
+  - **4MB Flash** - Espacio para firmware complejo
+  - **Mejor rendimiento** - Ideal para aplicaciones de tiempo real
+  - **Multitarea avanzada** - Procesamiento paralelo WiFi + UWB
 ```
 
 ## 📁 Estructura del Proyecto
@@ -251,12 +256,13 @@ jupyter lab
 ### **Placas UWB (x6 unidades disponibles):**
 - **Modelo:** [Makerfabs ESP32 UWB DW3000](https://www.makerfabs.com/esp32-uwb-dw3000.html)
 - **Chip UWB:** Decawave DW3000 (última generación)
-- **Microcontrolador:** ESP32 WROOM/WROVER
+- **Microcontrolador:** ESP32 WROVER (8MB PSRAM + 4MB Flash)
 - **Conectividad:** WiFi, Bluetooth integrados
 - **Alimentación:** Micro-USB (5V)
 - **Distribución:** 5 anclas + 1 tag (configuración actual)
+- **Precio:** $45.80 USD c/u (WROVER +$2.00 vs WROOM)
 
-### **Especificaciones ESP32 UWB DW3000:**
+### **Especificaciones ESP32 UWB DW3000 WROVER:**
 - ✅ **Compatible con Apple U1 chip** - Interoperabilidad avanzada
 - ✅ **Consumo ultra-bajo** - 1/3 del consumo vs DW1000
 - ✅ **Canales UWB:** Ch5 (6.5 GHz) y Ch9 (8 GHz)
@@ -264,6 +270,9 @@ jupyter lab
 - ✅ **Precisión mejorada** - Tracking de alta precisión
 - ✅ **Arduino compatible** - Fácil programación
 - ✅ **Rango de alimentación:** 4.8-5.5V (5.0V típico)
+- 🚀 **ESP32 WROVER ventajas:** 8MB PSRAM + 4MB Flash
+- 💾 **Memoria expandida** - Ideal para aplicaciones complejas
+- 📊 **Buffers grandes** - Mejor manejo de datos UWB
 
 ### **Infraestructura:**
 - Router WiFi 2.4GHz/5GHz
@@ -304,12 +313,13 @@ Según Makerfabs, para DW3000 usar: [Makerfabs-ESP32-UWB-DW3000](https://github.
    - WiFi (incluida con ESP32)
    ```
 
-#### **Configuración específica para Makerfabs DW3000:**
-- **Placa:** ESP32 Dev Module
-- **Partición:** Default 4MB with spiffs  
+#### **Configuración específica para Makerfabs DW3000 WROVER:**
+- **Placa:** ESP32 WROVER Module
+- **Partición:** Default 4MB with spiffs (o Huge APP para aprovechar 8MB PSRAM)
 - **CPU Frequency:** 240MHz
 - **Flash Mode:** DIO
 - **Flash Size:** 4MB
+- **PSRAM:** Enabled (para aprovechar los 8MB adicionales)
 - **Puerto:** Seleccionar el puerto COM correspondiente
 
 ### **Configuración de Red:**
@@ -364,6 +374,20 @@ Según Makerfabs, para DW3000 usar: [Makerfabs-ESP32-UWB-DW3000](https://github.
 - 🧪 Movimiento del tag por la cancha
 - 🧪 Captura de datos reales via MQTT
 - 🧪 Validación con sistema de replay
+
+### **Ventajas del ESP32 WROVER para tu TFG:**
+
+#### **🎯 Para Análisis Deportivo:**
+- **Buffers UWB grandes** - Los 8MB PSRAM permiten almacenar más mediciones
+- **Procesamiento en tiempo real** - Filtros Kalman y ML sin limitaciones de memoria
+- **Interfaz web compleja** - Visualización avanzada sin problemas de RAM
+- **Datos MQTT robustos** - Colas grandes para transmisión confiable
+
+#### **📊 Para Ciencia de Datos:**
+- **Datasets grandes** - Manejo de más datos históricos en memoria
+- **Algoritmos complejos** - Machine Learning con mayor capacidad
+- **Múltiples sensores** - Futuras expansiones del sistema
+- **Logging avanzado** - Almacenamiento temporal de métricas detalladas
 
 ---
 
