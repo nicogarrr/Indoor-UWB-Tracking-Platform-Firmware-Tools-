@@ -1,7 +1,7 @@
 #include "DW3000.h"
 #include <esp_task_wdt.h> // MEJORA TFG: Watchdog para robustez
 #define ID_PONG 50  // ID específico para esta ancla
-#include "../common/config.h" // TFG v2.1: Configuración centralizada
+#include "../../common/config.h" // TFG v2.1: Configuración centralizada
 
 // MEJORA 10: Librerías para métricas por red
 #if ENABLE_MQTT_METRICS
@@ -346,7 +346,13 @@ void setup() {
   Serial.println("m");
   
   // MEJORA TFG: Configurar Watchdog
-  esp_task_wdt_init(WATCHDOG_TIMEOUT_MS / 1000, true);
+  // MEJORA TFG: Configurar watchdog con API actualizada ESP32
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms = WATCHDOG_TIMEOUT_MS,
+    .idle_core_mask = 0,
+    .trigger_panic = true
+  };
+  esp_task_wdt_init(&wdt_config);
   esp_task_wdt_add(NULL);
   
   // MEJORA 10: Inicializar WiFi para métricas si está habilitado
@@ -438,18 +444,10 @@ bool initializeDW3000() {
       }
     }
 
-    // TFG v2.1-FINAL: Verificar retorno de DW3000.init()
-    if (!DW3000.init()) {
-      Serial.print("[WARNING] DW3000.init() falló en intento ");
-      Serial.println(attempts);
-      if (attempts < MAX_INIT_ATTEMPTS) {
-        esp_task_wdt_reset();
-        delay(DW3000_INIT_RETRY_DELAY_MS);
-        continue;
-      } else {
-        return false;
-      }
-    }
+    // TFG v2.1-FINAL: DW3000.init() no retorna bool en esta librería
+    DW3000.init(); // Simplificado - la librería Makerfabs no retorna estado
+    Serial.print("[INFO] DW3000.init() ejecutado en intento ");
+    Serial.println(attempts);
     
     DW3000.setupGPIO();
     // MEJORA 6: Eliminar configureAsTX() antes de standardRX()
