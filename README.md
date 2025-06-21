@@ -3,42 +3,44 @@
 **TFG 2024 - Trabajo de Fin de Grado**  
 **Autor:** Nicolás García  
 **Universidad:** [Tu Universidad]  
-**Versión:** v2.1-PRODUCTION
+**Versión:** v1.0
 
 ## 📋 Descripción del Proyecto
 
 Sistema de posicionamiento indoor de alta precisión basado en tecnología **Ultra-Wideband (UWB)** específicamente diseñado para el análisis de rendimiento deportivo en **fútbol sala**. 
 
-El sistema utiliza **5 anclas estratégicamente posicionadas** en una cancha de 40x20m para triangular la posición de jugadores equipados con tags UWB, proporcionando datos precisos de movimiento, velocidad y posicionamiento táctico.
+El sistema utiliza **5 anclas estratégicamente posicionadas** en una cancha de 40x20m para triangular la posición de jugadores equipados con tags UWB, proporcionando datos precisos de movimiento, velocidad y posicionamiento táctico en tiempo real.
 
-## 🎯 Características Principales
+## 🎯 Características del Sistema
 
-### ✅ **Arquitectura del Sistema**
-- **5 Anclas UWB** (ESP32 + DW3000) en posiciones fijas de la cancha
-- **Tags móviles** para jugadores con transmisión en tiempo real
-- **Protocolo TDMA** optimizado para baja latencia (<100ms)
-- **Conectividad WiFi/MQTT** para análisis en tiempo real
+### ✅ **Arquitectura Principal**
+- **5 Anclas UWB fijas** (ESP32 + DW3000) distribuidas en la cancha
+- **Tags móviles** ligeros para jugadores
+- **Protocolo TDMA** para coordinación temporal
+- **Conectividad WiFi/MQTT** para transmisión de datos
+- **Interfaz web** para visualización en tiempo real
 
-### ✅ **Mejoras Implementadas (13+ Features)**
-1. **Configuración Centralizada** - Source of truth único
-2. **Validación de IDs** - Prevención de errores de configuración
-3. **Filtros Anti-fantasmas** - Eliminación de señales espurias
-4. **Persistencia NVS** - Métricas conservadas entre reinicios
-5. **Rate-limiting de Logs** - Anti-spam inteligente
-6. **Métricas MQTT/UDP** - Telemetría en tiempo real
-7. **Beacons de Diagnóstico** - Debugging automático
-8. **Watchdog Inteligente** - Recuperación automática de fallos
-9. **Estados Tipados** - Máquina de estados robusta
-10. **Filtrado Kalman** - Suavizado de trayectorias
-11. **Detección de Outliers** - Rechazo de mediciones erróneas
-12. **Zonas Tácticas** - Análisis de áreas específicas
-13. **Visualización Web** - Dashboard en tiempo real
+### ✅ **Funcionalidades Implementadas**
+1. **Localización Triangular** - Posicionamiento basado en distancias UWB
+2. **Configuración Centralizada** - Gestión unificada de parámetros
+3. **Validación de Hardware** - Verificación de IDs y conexiones
+4. **Filtrado de Señales** - Eliminación de mediciones erróneas
+5. **Persistencia de Datos** - Almacenamiento de métricas en memoria no volátil
+6. **Logging Inteligente** - Sistema de trazas optimizado
+7. **Telemetría MQTT** - Transmisión de datos en tiempo real
+8. **Diagnóstico Automático** - Detección y reporte de fallos
+9. **Recuperación Automática** - Watchdog y reinicio inteligente
+10. **Máquina de Estados** - Control robusto del flujo de ejecución
+11. **Filtrado Kalman** - Suavizado de trayectorias de movimiento
+12. **Detección de Anomalías** - Identificación de mediciones atípicas
+13. **Análisis de Zonas** - Segmentación táctica de la cancha
+14. **Dashboard Web** - Interfaz de monitorización visual
 
-### ✅ **Precisión y Rendimiento**
-- **Precisión:** <30cm en condiciones óptimas
-- **Frecuencia:** 40Hz (25ms por actualización)
-- **Latencia:** <100ms end-to-end
-- **Cobertura:** Cancha completa 40x20m sin zonas muertas
+### ✅ **Especificaciones Técnicas**
+- **Precisión objetivo:** <50cm en condiciones reales
+- **Frecuencia de muestreo:** 20-40Hz
+- **Latencia total:** <200ms
+- **Área de cobertura:** Cancha completa 40x20m
 
 ## 🏗️ Arquitectura del Sistema
 
@@ -62,24 +64,24 @@ A10-A50: Anclas UWB (ESP32+DW3000)
 ## 📁 Estructura del Proyecto
 
 ```
-TFG-UWB-Localization-v2/
-├── README.md                 # Este archivo
+TFG-UWB/
+├── README.md                 # Documentación principal
 ├── .gitignore               # Protección de credenciales
 ├── common/                  # Configuración centralizada
-│   ├── config.h             # Configuración principal
-│   └── secrets.h            # Credenciales WiFi/MQTT
-├── uwb_anchor_10/           # Ancla esquina inferior izquierda
-│   └── anchor_10.ino        # Sketch principal (ID=10)
-├── uwb_anchor_20/           # Ancla esquina superior izquierda  
-│   └── anchor_20.ino        # Sketch principal (ID=20)
-├── uwb_anchor_30/           # Ancla esquina inferior derecha
-│   └── anchor_30.ino        # Sketch principal (ID=30)
-├── uwb_anchor_40/           # Ancla esquina superior derecha
-│   └── anchor_40.ino        # Sketch principal (ID=40)
-├── uwb_anchor_50/           # Ancla centro de cancha
-│   └── anchor_50.ino        # Sketch principal (ID=50)
-└── uwb_tag/                 # Tag móvil del jugador
-    └── tag.ino              # Sketch principal con IA
+│   ├── config.h             # Parámetros del sistema
+│   └── secrets.h            # Credenciales de red (no versionado)
+├── uwb_anchor_10/           # Ancla posición (0,0)
+│   └── anchor_10.ino        # Firmware ancla ID=10
+├── uwb_anchor_20/           # Ancla posición (0,20)
+│   └── anchor_20.ino        # Firmware ancla ID=20
+├── uwb_anchor_30/           # Ancla posición (40,0)
+│   └── anchor_30.ino        # Firmware ancla ID=30
+├── uwb_anchor_40/           # Ancla posición (40,20)
+│   └── anchor_40.ino        # Firmware ancla ID=40
+├── uwb_anchor_50/           # Ancla posición (20,10)
+│   └── anchor_50.ino        # Firmware ancla ID=50
+└── uwb_tag/                 # Tag móvil
+    └── tag.ino              # Firmware tag con algoritmos de localización
 ```
 
 ## 🛠️ Hardware Requerido
@@ -178,25 +180,25 @@ El sistema genera datos CSV compatibles con:
 - **R/MATLAB** - Procesamiento estadístico
 - **Tableau/PowerBI** - Visualización profesional
 
-## 🎯 Casos de Uso TFG
+## 🎯 Aplicaciones Deportivas
 
-### **Métricas de Rendimiento:**
-- **Distancia total recorrida** por jugador/partido
-- **Velocidad máxima/promedio** en sprints
-- **Aceleración/desaceleración** en cambios de ritmo
-- **Tiempo en zonas tácticas** (área, centro, bandas)
+### **Análisis de Rendimiento:**
+- **Distancia recorrida** por jugador y sesión
+- **Velocidades máximas** y promedio durante el juego
+- **Patrones de aceleración** en sprints y frenadas
+- **Tiempo de permanencia** en diferentes zonas de la cancha
 
 ### **Análisis Táctico:**
-- **Mapas de calor** de posicionamiento
-- **Patrones de movimiento** individual/grupal
-- **Análisis de presión** defensiva
-- **Eficiencia en transiciones** ataque/defensa
+- **Mapas de calor** de posicionamiento de jugadores
+- **Trayectorias de movimiento** individual y colectivo
+- **Análisis de formaciones** defensivas y ofensivas
+- **Estudios de transiciones** entre fases de juego
 
-### **Prevención de Lesiones:**
-- **Detección de fatiga** por cambios en velocidad
-- **Carga de trabajo** acumulativa
-- **Patrones de movimiento** anómalos
-- **Alertas de sobreexigencia**
+### **Monitorización de Carga:**
+- **Intensidad de movimiento** durante entrenamientos
+- **Distribución temporal** de esfuerzos
+- **Comparación entre sesiones** de entrenamiento
+- **Datos objetivos** para planificación deportiva
 
 ## 🔧 Solución de Problemas
 
@@ -229,39 +231,48 @@ El sistema genera datos CSV compatibles con:
 4. Filtros Kalman activos
 ```
 
-## 📈 Resultados Esperados TFG
+## 📈 Objetivos del TFG
 
-### **Precisión Validada:**
-- ✅ **Error < 30cm** en 90% de mediciones  
-- ✅ **Latencia < 100ms** end-to-end
-- ✅ **Disponibilidad > 99%** durante partidos
-- ✅ **0 falsos positivos** con filtros implementados
+### **Métricas de Precisión Objetivo:**
+- 🎯 **Error < 50cm** en condiciones reales de juego
+- 🎯 **Latencia < 200ms** para análisis en tiempo real
+- 🎯 **Cobertura 100%** de la cancha sin zonas muertas
+- 🎯 **Disponibilidad > 95%** durante sesiones de entrenamiento
 
-### **Innovaciones Desarrolladas:**
-- ✅ **Algoritmo TDMA optimizado** para deportes
-- ✅ **Filtros adaptativos** para movimientos deportivos  
-- ✅ **Sistema de zonas tácticas** configurables
-- ✅ **Predicción de trayectorias** con IA
+### **Funcionalidades a Desarrollar:**
+- 🔄 **Protocolo TDMA eficiente** para múltiples dispositivos
+- 🔄 **Algoritmos de filtrado** para datos de movimiento deportivo
+- 🔄 **Sistema de zonas deportivas** para análisis táctico
+- 🔄 **Interfaz de visualización** para entrenadores
 
-## 👨‍💻 Contribuciones
+## 👨‍💻 Desarrollo del Proyecto
 
-Este es un proyecto de TFG académico. Para consultas o colaboraciones:
+Este es un **Trabajo de Fin de Grado** en desarrollo activo.
 
+### **Información del Proyecto:**
 - **Autor:** Nicolás García
 - **GitHub:** [@nicogarrr](https://github.com/nicogarrr)
-- **Email:** [tu-email@universidad.edu]
+- **Universidad:** [Tu Universidad]
+- **Año académico:** 2024
+
+### **Estado Actual:**
+- 🟢 **Diseño del sistema** - Completado
+- 🟢 **Implementación hardware** - En desarrollo
+- 🟡 **Algoritmos de localización** - En progreso
+- 🟡 **Interfaz de usuario** - Planificado
+- 🔴 **Validación experimental** - Pendiente
 
 ## 📄 Licencia
 
-Este proyecto está bajo licencia MIT para fines académicos y de investigación.
+Este proyecto está desarrollado para fines académicos y de investigación.
 
-## 🏆 Reconocimientos
+## 🏆 Agradecimientos
 
 - **Tutor TFG:** [Nombre del tutor]
 - **Universidad:** [Tu Universidad]
-- **Departamento:** Ingeniería de Telecomunicaciones
-- **Año:** 2024
+- **Departamento:** [Tu Departamento]
+- **Área:** Sistemas de Telecomunicaciones
 
 ---
 
-**⚽ Desarrollado con pasión por el fútbol sala y la innovación tecnológica ⚽** 
+**⚽ Innovación tecnológica aplicada al deporte ⚽** 
