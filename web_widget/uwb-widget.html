@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TFG UWB Widget - Posicionamiento en Vivo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        .uwb-widget {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            border-radius: 12px;
+            padding: 15px;
+            max-width: 100%;
+            margin: 0 auto;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        
+        .widget-header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .widget-title {
+            font-size: 18px;
+            margin-bottom: 5px;
+            color: #FFD700;
+        }
+        
+        .connection-status {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+        
+        .status-connected {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .status-disconnected {
+            background: #F44336;
+            color: white;
+        }
+        
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .stat-item {
+            background: rgba(255,255,255,0.1);
+            padding: 8px;
+            border-radius: 8px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .stat-value {
+            display: block;
+            font-size: 16px;
+            font-weight: bold;
+            color: #FFD700;
+            margin-bottom: 2px;
+        }
+        
+        .stat-label {
+            font-size: 10px;
+            opacity: 0.8;
+        }
+        
+        .court-container {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        #mini-court {
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background: #2d5016;
+            width: 100%;
+            max-width: 300px;
+            height: 150px;
+        }
+        
+        .widget-footer {
+            text-align: center;
+            font-size: 10px;
+            opacity: 0.6;
+            margin-top: 10px;
+        }
+        
+        .powered-by {
+            color: #FFD700;
+            text-decoration: none;
+        }
+        
+        /* Responsive */
+        @media (max-width: 300px) {
+            .stats-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .stat-value {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="uwb-widget" id="uwb-widget">
+        <div class="widget-header">
+            <h3 class="widget-title">🏟️ Posición en Vivo</h3>
+            <span class="connection-status status-disconnected" id="status">
+                🔴 Conectando...
+            </span>
+        </div>
+        
+        <div class="stats-container">
+            <div class="stat-item">
+                <span class="stat-value" id="pos-x">--</span>
+                <span class="stat-label">X (m)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="pos-y">--</span>
+                <span class="stat-label">Y (m)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="speed">--</span>
+                <span class="stat-label">Vel (m/s)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="zone">--</span>
+                <span class="stat-label">Zona</span>
+            </div>
+        </div>
+        
+        <div class="court-container">
+            <canvas id="mini-court" width="300" height="150"></canvas>
+        </div>
+        
+        <div class="widget-footer">
+            Powered by <a href="#" class="powered-by">TFG UWB Analytics</a>
+        </div>
+    </div>
+
+    <script>
+        class UWBWidget {
+            constructor(esp32Ip = '192.168.1.100', refreshRate = 3000) {
+                this.esp32Ip = esp32Ip;
+                this.refreshRate = refreshRate;
+                this.canvas = document.getElementById('mini-court');
+                this.ctx = this.canvas.getContext('2d');
+                this.isConnected = false;
+                this.currentData = { x: 0, y: 0, speed: 0 };
+                
+                this.init();
+            }
+            
+            init() {
+                this.drawCourt();
+                this.startTracking();
+                
+                // Configurar canvas responsive
+                this.resizeCanvas();
+                window.addEventListener('resize', () => this.resizeCanvas());
+            }
+            
+            resizeCanvas() {
+                const container = document.querySelector('.court-container');
+                const containerWidth = container.clientWidth - 20; // padding
+                const aspectRatio = 2; // 40m x 20m = 2:1
+                
+                this.canvas.style.width = Math.min(containerWidth, 300) + 'px';
+                this.canvas.style.height = (Math.min(containerWidth, 300) / aspectRatio) + 'px';
+            }
+            
+            startTracking() {
+                setInterval(() => {
+                    this.fetchData();
+                }, this.refreshRate);
+                
+                // Primera carga inmediata
+                this.fetchData();
+            }
+            
+            async fetchData() {
+                try {
+                    const response = await fetch(`http://${this.esp32Ip}/data`, {
+                        mode: 'cors',
+                        timeout: 5000
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    this.updateWidget(data);
+                    this.setConnectionStatus(true);
+                    
+                } catch (error) {
+                    console.warn('UWB Widget: Error conectando ESP32', error);
+                    this.setConnectionStatus(false);
+                    
+                    // Datos de demostración si no hay conexión
+                    this.simulateData();
+                }
+            }
+            
+            updateWidget(data) {
+                this.currentData = data;
+                
+                // Actualizar estadísticas
+                document.getElementById('pos-x').textContent = 
+                    data.x !== undefined ? data.x.toFixed(1) : '--';
+                document.getElementById('pos-y').textContent = 
+                    data.y !== undefined ? data.y.toFixed(1) : '--';
+                document.getElementById('speed').textContent = 
+                    data.speed !== undefined ? data.speed.toFixed(1) : '--';
+                
+                // Determinar zona
+                const zone = this.getZone(data.x, data.y);
+                document.getElementById('zone').textContent = zone;
+                
+                // Actualizar visualización
+                this.updateVisualization(data.x, data.y);
+            }
+            
+            getZone(x, y) {
+                if (x === undefined || y === undefined) return '--';
+                
+                if (x <= 13.33) return 'DEF';
+                else if (x >= 26.67) return 'ATK';
+                else if (Math.abs(x - 20) <= 3 && Math.abs(y - 10) <= 3) return 'MID';
+                else return 'PLAY';
+            }
+            
+            setConnectionStatus(connected) {
+                const status = document.getElementById('status');
+                
+                if (connected && !this.isConnected) {
+                    status.textContent = '🟢 Conectado';
+                    status.className = 'connection-status status-connected';
+                } else if (!connected && this.isConnected) {
+                    status.textContent = '🔴 Sin conexión';
+                    status.className = 'connection-status status-disconnected';
+                }
+                
+                this.isConnected = connected;
+            }
+            
+            simulateData() {
+                // Datos de demostración para testing
+                if (!this.isConnected) {
+                    const demoData = {
+                        x: 15 + Math.sin(Date.now() / 2000) * 10,
+                        y: 10 + Math.cos(Date.now() / 3000) * 5,
+                        speed: 2 + Math.random() * 3
+                    };
+                    this.updateWidget(demoData);
+                }
+            }
+            
+            drawCourt() {
+                const ctx = this.ctx;
+                const width = this.canvas.width;
+                const height = this.canvas.height;
+                
+                // Limpiar
+                ctx.clearRect(0, 0, width, height);
+                
+                // Configurar estilo
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                
+                // Perímetro
+                ctx.strokeRect(0, 0, width, height);
+                
+                // Línea central
+                ctx.beginPath();
+                ctx.moveTo(width/2, 0);
+                ctx.lineTo(width/2, height);
+                ctx.stroke();
+                
+                // Círculo central
+                ctx.beginPath();
+                ctx.arc(width/2, height/2, 15, 0, 2 * Math.PI);
+                ctx.stroke();
+                
+                // Áreas de portería
+                const goalWidth = width * 0.15;
+                const goalHeight = height * 0.6;
+                const goalY = (height - goalHeight) / 2;
+                
+                ctx.strokeRect(0, goalY, goalWidth, goalHeight);
+                ctx.strokeRect(width - goalWidth, goalY, goalWidth, goalHeight);
+            }
+            
+            updateVisualization(x, y) {
+                // Redibujar cancha
+                this.drawCourt();
+                
+                // Dibujar jugador si hay posición válida
+                if (x !== undefined && y !== undefined) {
+                    const ctx = this.ctx;
+                    const canvasX = (x / 40) * this.canvas.width;
+                    const canvasY = (y / 20) * this.canvas.height;
+                    
+                    // Punto del jugador
+                    ctx.fillStyle = '#ff0000';
+                    ctx.beginPath();
+                    ctx.arc(canvasX, canvasY, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    // Indicador de velocidad (círculo)
+                    if (this.currentData.speed > 1) {
+                        const speedRadius = Math.min(15, this.currentData.speed * 3);
+                        ctx.strokeStyle = '#ffff00';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.arc(canvasX, canvasY, speedRadius, 0, 2 * Math.PI);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+        
+        // Configuración del widget - PERSONALIZABLE
+        const WIDGET_CONFIG = {
+            esp32_ip: '192.168.1.100',  // IP de tu ESP32
+            refresh_rate: 3000,         // Actualización cada 3 segundos
+            auto_start: true            // Iniciar automáticamente
+        };
+        
+        // Inicializar widget
+        let uwbWidget;
+        
+        if (WIDGET_CONFIG.auto_start) {
+            document.addEventListener('DOMContentLoaded', function() {
+                uwbWidget = new UWBWidget(
+                    WIDGET_CONFIG.esp32_ip, 
+                    WIDGET_CONFIG.refresh_rate
+                );
+            });
+        }
+        
+        // API pública del widget
+        window.UWBWidget = {
+            start: (ip, rate) => {
+                uwbWidget = new UWBWidget(ip || WIDGET_CONFIG.esp32_ip, rate || WIDGET_CONFIG.refresh_rate);
+            },
+            stop: () => {
+                if (uwbWidget) {
+                    // Implementar stop si es necesario
+                }
+            },
+            configure: (newConfig) => {
+                Object.assign(WIDGET_CONFIG, newConfig);
+            }
+        };
+    </script>
+</body>
+</html> 

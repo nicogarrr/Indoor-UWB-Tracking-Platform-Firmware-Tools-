@@ -13,6 +13,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Button, Slider
 import argparse
 import sys
+import os
 from datetime import datetime, timedelta
 import time
 from scipy.interpolate import CubicSpline, interp1d
