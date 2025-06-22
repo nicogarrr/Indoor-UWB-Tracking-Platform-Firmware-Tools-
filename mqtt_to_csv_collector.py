@@ -21,7 +21,7 @@ import sys
 from threading import Lock
 
 class MQTTToCSVCollector:
-    def __init__(self, mqtt_server="172.20.10.3", mqtt_port=1883, output_dir="./data"):
+    def __init__(self, mqtt_server="172.20.10.3", mqtt_port=1883, output_dir="data"):
         self.mqtt_server = mqtt_server
         self.mqtt_port = mqtt_port
         self.output_dir = output_dir
@@ -31,14 +31,18 @@ class MQTTToCSVCollector:
         
         # Archivos CSV
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # *** ARCHIVO PRINCIPAL COMPATIBLE CON MOVEMENT_REPLAY.PY ***
+        self.main_file = os.path.join(output_dir, f"uwb_data_futsal_game_{timestamp}.csv")
+        
+        # Archivos especializados (opcionales)
         self.ranging_file = os.path.join(output_dir, f"ranging_data_{timestamp}.csv")
-        self.position_file = os.path.join(output_dir, f"position_data_{timestamp}.csv")
         self.zones_file = os.path.join(output_dir, f"zones_data_{timestamp}.csv")
         self.metrics_file = os.path.join(output_dir, f"metrics_data_{timestamp}.csv")
         
         # Contadores y estadísticas
+        self.main_count = 0
         self.ranging_count = 0
-        self.position_count = 0
         self.zones_count = 0
         self.metrics_count = 0
         self.start_time = time.time()
@@ -59,14 +63,24 @@ class MQTTToCSVCollector:
         print(f"📂 Directorio de salida: {output_dir}")
         print(f"🔗 MQTT Broker: {mqtt_server}:{mqtt_port}")
         print(f"📁 Archivos:")
+        print(f"   ⭐ PRINCIPAL (Replay): {self.main_file}")
         print(f"   • Ranging: {self.ranging_file}")
-        print(f"   • Posición: {self.position_file}")
         print(f"   • Zonas: {self.zones_file}")
         print(f"   • Métricas: {self.metrics_file}")
         print("=" * 60)
     
     def init_csv_files(self):
         """Inicializar archivos CSV con headers apropiados"""
+        
+        # *** ARCHIVO PRINCIPAL COMPATIBLE CON MOVEMENT_REPLAY.PY ***
+        # Formato requerido: timestamp, x, y, tag_id + columnas adicionales UWB
+        with open(self.main_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                'timestamp', 'tag_id', 'x', 'y',
+                'anchor_10_dist', 'anchor_20_dist', 'anchor_30_dist', 
+                'anchor_40_dist', 'anchor_50_dist'
+            ])
         
         # Archivo de ranging (datos brutos UWB)
         with open(self.ranging_file, 'w', newline='') as f:
@@ -75,16 +89,6 @@ class MQTTToCSVCollector:
                 'timestamp_system', 'timestamp_device', 'tag_id', 'anchor_id',
                 'distance_raw_cm', 'distance_filtered_cm', 'rssi_dbm', 
                 'anchor_responded', 'session_id'
-            ])
-        
-        # Archivo de posición (trilateración y filtros Kalman)
-        with open(self.position_file, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                'timestamp_system', 'timestamp_device', 'tag_id', 
-                'position_x_m', 'position_y_m', 'velocity_x_ms', 'velocity_y_ms',
-                'speed_ms', 'prediction_x_m', 'prediction_y_m',
-                'responding_anchors', 'update_rate_hz', 'session_id'
             ])
         
         # Archivo de zonas (eventos de fútbol sala)
@@ -206,8 +210,32 @@ class MQTTToCSVCollector:
                 pred = data.get('prediction', {})
                 quality = data.get('quality', {})
                 
+                # *** ESCRIBIR AL ARCHIVO PRINCIPAL (COMPATIBLE MOVEMENT_REPLAY.PY) ***
+                # Convertir timestamp a formato datetime
+                dt_timestamp = datetime.datetime.fromtimestamp(timestamp_system)
+                
+                # Obtener distancias a las anclas (simuladas si no están disponibles)
+                anchor_distances = data.get('anchor_distances', {})
+                
                 with self.file_lock:
-                    with open(self.position_file, 'a', newline='') as f:
+                    with open(self.main_file, 'a', newline='') as f:
+                        writer = csv.writer(f)
+                        writer.writerow([
+                            dt_timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],  # timestamp
+                            tag_id,                                             # tag_id
+                            pos.get('x', 0.0),                                 # x
+                            pos.get('y', 0.0),                                 # y
+                            anchor_distances.get('10', 0.0),                   # anchor_10_dist
+                            anchor_distances.get('20', 0.0),                   # anchor_20_dist
+                            anchor_distances.get('30', 0.0),                   # anchor_30_dist
+                            anchor_distances.get('40', 0.0),                   # anchor_40_dist
+                            anchor_distances.get('50', 0.0)                    # anchor_50_dist
+                        ])
+                self.main_count += 1
+                
+                # *** TAMBIÉN ESCRIBIR AL ARCHIVO DE RANGING (HISTÓRICO) ***
+                with self.file_lock:
+                    with open(self.ranging_file, 'a', newline='') as f:
                         writer = csv.writer(f)
                         writer.writerow([
                             timestamp_system,
@@ -224,7 +252,7 @@ class MQTTToCSVCollector:
                             quality.get('update_rate_hz', 0.0),
                             session_id
                         ])
-                self.position_count += 1
+                self.ranging_count += 1
                 
         except Exception as e:
             print(f"❌ Error en position data: {e}")
@@ -307,12 +335,21 @@ class MQTTToCSVCollector:
         uptime = time.time() - self.start_time
         print(f"\n📊 Estadísticas de recolección:")
         print(f"   ⏱️  Tiempo activo: {uptime:.1f}s")
+        print(f"   ⭐ Datos principales (replay): {self.main_count}")
         print(f"   📏 Datos ranging: {self.ranging_count}")
-        print(f"   📍 Datos posición: {self.position_count}")
         print(f"   🏟️  Eventos zonas: {self.zones_count}")
         print(f"   📈 Métricas: {self.metrics_count}")
         if uptime > 0:
+            print(f"   📊 Tasa principal: {self.main_count/uptime:.1f} msgs/s")
             print(f"   📊 Tasa ranging: {self.ranging_count/uptime:.1f} msgs/s")
+        print(f"   📁 Archivo principal: {os.path.basename(self.main_file)}")
+        
+        # Información de compatibilidad
+        if self.main_count > 0:
+            print(f"\n✅ Archivo COMPATIBLE con movement_replay.py")
+            print(f"   Para usar: python movement_replay.py \"{self.main_file}\"")
+        else:
+            print(f"\n⚠️  Sin datos de posición aún...")
     
     def run(self):
         """Ejecutar el recolector"""
@@ -355,7 +392,7 @@ if __name__ == "__main__":
                         help="Dirección IP del broker MQTT")
     parser.add_argument("--mqtt-port", type=int, default=1883,
                         help="Puerto del broker MQTT")
-    parser.add_argument("--output-dir", default="./data",
+    parser.add_argument("--output-dir", default="data",
                         help="Directorio de salida para archivos CSV")
     
     args = parser.parse_args()

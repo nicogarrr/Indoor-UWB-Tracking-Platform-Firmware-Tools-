@@ -1,0 +1,38 @@
+🏟️ REPORTE DE ANÁLISIS DE RENDIMIENTO - FÚTBOL SALA
+============================================================
+
+📊 MÉTRICAS BÁSICAS:
+⏱️  Duración total: 60.0 segundos
+📏 Distancia total: 263.7 metros
+🏃 Velocidad promedio: 4.40 m/s
+⚡ Velocidad máxima: 36.55 m/s
+
+💨 ANÁLISIS DE SPRINTS:
+🔥 Total de sprints: 0
+
+🎯 ANÁLISIS POR ZONAS TÁCTICAS:
+📍 area_defensiva_propia:
+   ⏱️  Tiempo: 0.0s
+   📏 Distancia: 0.0m
+   🏃 Vel. promedio: 0.00 m/s
+📍 zona_defensiva:
+   ⏱️  Tiempo: 0.0s
+   📏 Distancia: 0.0m
+   🏃 Vel. promedio: 0.00 m/s
+📍 zona_media:
+   ⏱️  Tiempo: 19.7s
+   📏 Distancia: 90.7m
+   🏃 Vel. promedio: 4.61 m/s
+📍 zona_ofensiva:
+   ⏱️  Tiempo: 40.3s
+   📏 Distancia: 173.1m
+   🏃 Vel. promedio: 4.30 m/s
+📍 area_ofensiva_rival:
+   ⏱️  Tiempo: 0.0s
+   📏 Distancia: 0.0m
+   🏃 Vel. promedio: 0.00 m/s
+
+⚽ MÉTRICAS ESPECÍFICAS FÚTBOL SALA:
+🔄 Cambios de dirección: 1456
+⚔️  Tiempo ofensivo: 91.2%
+📍 Distancia promedio al centro: 11.3m

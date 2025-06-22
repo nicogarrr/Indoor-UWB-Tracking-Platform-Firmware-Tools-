@@ -1052,55 +1052,113 @@ def generate_movement_report(csv_file):
 
 def select_replay_file_interactive():
     """
-    Selección interactiva de archivos para replay
+    Selección interactiva de archivos para replay con validación mejorada
     """
     import os
     import glob
     from datetime import datetime
     
-    # Buscar archivos en data/ y processed_data/
-    data_files = glob.glob("data/*.csv")
-    processed_files = glob.glob("processed_data/*.csv")
+    print("\n🎬 SELECCIONAR ARCHIVO PARA REPLAY UWB")
+    print("=" * 70)
+    print("📍 Ubicación de archivos:")
+    print(f"   🗂️  Directorio actual: {os.getcwd()}")
+    print(f"   📁 data/: Datos originales sin procesar")
+    print(f"   📊 processed_data/: Datos ya procesados y filtrados")
+    print("=" * 70)
     
-    all_files = []
-    if data_files:
-        all_files.extend(data_files)
-    if processed_files:
-        all_files.extend(processed_files)
+    # Buscar archivos en ambos directorios
+    data_files = []
     
-    if not all_files:
-        print("❌ No se encontraron archivos CSV en data/ o processed_data/")
+    # Archivos en data/
+    if os.path.exists("data"):
+        for file_path in glob.glob("data/*.csv"):
+            if os.path.exists(file_path):  # Verificar que existe físicamente
+                data_files.append(file_path)
+    
+    # Archivos en processed_data/
+    if os.path.exists("processed_data"):
+        for file_path in glob.glob("processed_data/*.csv"):
+            if os.path.exists(file_path):  # Verificar que existe físicamente
+                data_files.append(file_path)
+    
+    if not data_files:
+        print("❌ No se encontraron archivos CSV válidos")
+        print("💡 Asegúrate de tener archivos .csv en las carpetas 'data/' o 'processed_data/'")
         return None
     
-    print("\n🎬 SELECCIONAR ARCHIVO PARA REPLAY:")
-    print("=" * 60)
+    # Ordenar por tamaño (archivos más grandes primero, más útiles para replay)
+    data_files.sort(key=lambda x: os.path.getsize(x), reverse=True)
     
-    for i, file_path in enumerate(all_files, 1):
-        file_name = os.path.basename(file_path)
-        file_size = os.path.getsize(file_path) / 1024  # KB
-        mod_time = os.path.getmtime(file_path)
-        mod_date = datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M")
-        folder = "📁 data/" if file_path.startswith("data/") else "📊 processed_data/"
-        
-        print(f"{i:2d}. {folder}{file_name:<35} | {file_size:6.1f}KB | {mod_date}")
+    print(f"\n📋 ARCHIVOS DISPONIBLES ({len(data_files)} encontrados):")
+    print("=" * 70)
     
+    for i, file_path in enumerate(data_files, 1):
+        try:
+            file_name = os.path.basename(file_path)
+            file_size = os.path.getsize(file_path) / 1024  # KB
+            mod_time = os.path.getmtime(file_path)
+            mod_date = datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M")
+            
+            # Determinar carpeta y icono
+            if file_path.startswith("data/"):
+                folder_icon = "📥"
+                folder_name = "data"
+                folder_desc = "(original)"
+            else:
+                folder_icon = "📊"
+                folder_name = "processed_data"
+                folder_desc = "(procesado)"
+            
+            # Determinar si es un archivo bueno para replay (>50KB)
+            if file_size > 50:
+                quality_icon = "⭐"
+                quality_desc = "RECOMENDADO"
+            elif file_size > 5:
+                quality_icon = "✅"
+                quality_desc = "BUENO"
+            else:
+                quality_icon = "⚠️"
+                quality_desc = "PEQUEÑO"
+            
+            print(f"{i:2d}. {quality_icon} {folder_icon} {folder_name}/{file_name:<35}")
+            print(f"    📊 {file_size:7.1f}KB | 📅 {mod_date} | 🎯 {quality_desc}")
+            print()
+            
+        except Exception as e:
+            print(f"{i:2d}. ❌ Error leyendo archivo: {file_path}")
+    
+    print("💡 RECOMENDACIÓN: Selecciona archivos marcados con ⭐ para mejor experiencia")
     print(f"\n 0. ❌ Cancelar")
     
     while True:
         try:
-            choice = input(f"\n👆 Selecciona un archivo (1-{len(all_files)}) o 0 para cancelar: ").strip()
+            choice = input(f"\n👆 Selecciona un archivo (1-{len(data_files)}) o 0 para cancelar: ").strip()
             
             if choice == '0':
                 print("❌ Operación cancelada")
                 return None
             
             file_idx = int(choice) - 1
-            if 0 <= file_idx < len(all_files):
-                selected_file = all_files[file_idx]
-                print(f"✅ Archivo seleccionado: {selected_file}")
+            if 0 <= file_idx < len(data_files):
+                selected_file = data_files[file_idx]
+                
+                # Verificar que el archivo existe y validar contenido
+                if not os.path.exists(selected_file):
+                    print(f"❌ Error: El archivo seleccionado no existe: {selected_file}")
+                    continue
+                
+                # Mostrar información del archivo seleccionado
+                file_size = os.path.getsize(selected_file) / 1024
+                folder_name = "data" if selected_file.startswith("data/") else "processed_data"
+                
+                print(f"\n✅ ARCHIVO SELECCIONADO:")
+                print(f"   📁 Ubicación: {folder_name}/{os.path.basename(selected_file)}")
+                print(f"   📊 Tamaño: {file_size:.1f} KB")
+                print(f"   🗂️  Ruta completa: {os.path.abspath(selected_file)}")
+                
                 return selected_file
             else:
-                print(f"⚠️  Número inválido. Ingresa un número entre 1 y {len(all_files)}")
+                print(f"⚠️  Número inválido. Ingresa un número entre 1 y {len(data_files)}")
                 
         except ValueError:
             print("⚠️  Por favor ingresa un número válido")

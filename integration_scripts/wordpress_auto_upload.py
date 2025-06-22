@@ -45,9 +45,9 @@ class WordPressUploaderTFG:
         """Cargar configuración desde archivo JSON"""
         default_config = {
             "wordpress": {
-                "url": "https://tu-equipo.com",
-                "username": "admin",
-                "password": "tu_password",
+                "url": "https://tu-equipo-futsal.com",
+                "username": "admin_tfg",
+                "password": "tu_password_seguro",
                 "api_endpoint": "/wp-json/wp/v2"
             },
             "monitoring": {
@@ -58,12 +58,13 @@ class WordPressUploaderTFG:
             "processing": {
                 "min_file_size": 1024,
                 "max_file_size": 10485760,
-                "required_columns": ["timestamp", "x", "y"]
+                "required_columns": ["timestamp", "x", "y", "tag_id"]
             },
             "team": {
-                "team_name": "Mi Equipo de Fútbol Sala",
-                "default_player_id": "jugador_01",
-                "season": "2024"
+                "team_name": "Equipo TFG Fútbol Sala UWB",
+                "default_player_id": "jugador_tfg",
+                "season": "2025",
+                "project_name": "Sistema UWB para Análisis Deportivo"
             }
         }
         
@@ -323,7 +324,7 @@ class WordPressUploaderTFG:
                 url = f"{wp_config['url']}{wp_config['api_endpoint']}/media"
                 
                 # Temporal: remover Content-Type para upload de archivos
-                headers = self.session.headers.copy()
+                headers = dict(self.session.headers)
                 if 'Content-Type' in headers:
                     del headers['Content-Type']
                 
