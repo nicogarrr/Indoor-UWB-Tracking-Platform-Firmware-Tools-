@@ -254,7 +254,7 @@ class TrajectoryPredictor:
         return predictions
 
 class FutsalReplaySystem:
-    def __init__(self, csv_file, optimize_memory=False, skip_trail=False):
+    def __init__(self, csv_file, optimize_memory=False, skip_trail=False, verbose_debug=False):
         """
         Inicializar el sistema de replay avanzado
         
@@ -262,6 +262,7 @@ class FutsalReplaySystem:
             csv_file: Archivo CSV con datos de movimiento
             optimize_memory: Flag para optimizar memoria en datasets grandes (>1M filas)
             skip_trail: Flag para omitir trayectoria en tiempo real (reduce memoria)
+            verbose_debug: Flag para mostrar todos los logs de debug GPR (puede ser spam)
         """
         print(" Cargando Sistema Avanzado de Replay UWB...")
         
@@ -270,6 +271,8 @@ class FutsalReplaySystem:
         self.use_ml_prediction = True
         self.optimize_memory = optimize_memory
         self.skip_trail = skip_trail
+        self.verbose_debug = verbose_debug
+        self.debug_log_counter = 0  # Contador para limitar spam de logs
         
         # Ajustar parámetros según optimización de memoria
         if optimize_memory:
@@ -277,7 +280,12 @@ class FutsalReplaySystem:
             print(" Modo optimización de memoria activado (trail reducido)")
         else:
             self.trail_length = 100
-            
+        
+        # === COHERENCIA: Reducir trail_length si skip_trail está activado ===
+        if skip_trail:
+            self.trail_length = min(self.trail_length, 20)  # Máximo 20 puntos en modo skip_trail
+            print(f" Trail simplificado: {self.trail_length} puntos (skip_trail activado)")
+        
         self.animation_step_ms = 20  # 50 FPS
         self.max_player_speed = 7.0  # m/s (velocidad sprint fútbol sala - límite físico)
         self.interpolation_threshold = 100  # ms
@@ -299,31 +307,53 @@ class FutsalReplaySystem:
     def load_data(self, csv_file):
         """Cargar y procesar datos CSV con filtros avanzados"""
         try:
-            # === OPTIMIZACIÓN DE MEMORIA: Detección de datasets grandes ===
+            # === OPTIMIZACIÓN DE MEMORIA: Detección precisa de datasets grandes ===
             file_size_mb = os.path.getsize(csv_file) / (1024 * 1024)
             print(f" Tamaño del archivo: {file_size_mb:.1f} MB")
             
-            if file_size_mb > 20:  # Datasets >20MB pueden generar ~100MB+ en memoria
-                print("⚠️  ADVERTENCIA: Dataset grande detectado")
-                print(f"   Archivo: {file_size_mb:.1f} MB → Memoria estimada: ~{file_size_mb * 5:.0f} MB")
-                print("   Considera usar --optimize-memory para datasets >50MB")
+            if file_size_mb > 20:  # Datasets >20MB requieren análisis detallado
+                print("WARNING: Dataset grande detectado")
+                print(f"   Archivo: {file_size_mb:.1f} MB")
                 
                 if not self.optimize_memory and file_size_mb > 50:
-                    print("🔴 RECOMENDACIÓN CRÍTICA: Activa optimización de memoria")
+                    print("RECOMENDACION CRITICA: Activa optimización de memoria")
                     print("   python movement_replay.py --optimize-memory [archivo]")
             
-            self.original_df = pd.read_csv(csv_file)
+            # Cargar con tipos optimizados si está activada la optimización
+            if self.optimize_memory:
+                print(" Modo optimización de memoria: cargando con tipos float32")
+                try:
+                    # Cargar primero y luego convertir tipos
+                    self.original_df = pd.read_csv(csv_file)
+                    # Convertir columnas numéricas a float32 para ahorrar memoria
+                    for col in ['x', 'y']:
+                        if col in self.original_df.columns:
+                            self.original_df[col] = self.original_df[col].astype('float32')
+                    if 'tag_id' in self.original_df.columns:
+                        self.original_df['tag_id'] = self.original_df['tag_id'].astype('int32')
+                except Exception as e:
+                    print(f"   Advertencia: Error en optimización de tipos: {e}")
+                    self.original_df = pd.read_csv(csv_file)
+            else:
+                self.original_df = pd.read_csv(csv_file)
             
-            # Verificar número de filas para memoria
+            # === ESTIMACIÓN PRECISA DE MEMORIA ===
             num_rows = len(self.original_df)
-            print(f" Registros originales: {num_rows:,}")
+            memory_usage_mb = self.original_df.memory_usage(deep=True).sum() / (1024 * 1024)
             
-            if num_rows > 500_000:  # >500k filas pueden usar mucha RAM
-                estimated_memory_gb = (num_rows * 5) / 1_000_000  # Estimación conservadora
-                print(f"⚠️  Memoria estimada: ~{estimated_memory_gb:.1f} GB después del procesamiento")
+            print(f" Registros originales: {num_rows:,}")
+            print(f" Memoria actual DataFrame: {memory_usage_mb:.1f} MB")
+            
+            # Estimación realista después del procesamiento (×8-10 por interpolación + cálculos)
+            interpolation_factor = 8 if self.optimize_memory else 10
+            estimated_final_memory_mb = memory_usage_mb * interpolation_factor
+            
+            if num_rows > 500_000:  # >500k filas requieren advertencia
+                print(f"⚠️  Memoria estimada final: ~{estimated_final_memory_mb:.0f} MB ({estimated_final_memory_mb/1024:.1f} GB)")
                 
-                if num_rows > 1_000_000 and not self.optimize_memory:
-                    print("🔴 DATASET CRÍTICO: >1M filas. Recomendado reiniciar con --optimize-memory")
+                if estimated_final_memory_mb > 1024 and not self.optimize_memory:  # >1GB
+                    print("🔴 DATASET CRÍTICO: Memoria estimada >1GB. Recomendado --optimize-memory")
+                    print("   O usar --skip-trail para reducir aún más la memoria")
             
             self.original_df['timestamp'] = pd.to_datetime(self.original_df['timestamp'])
             
@@ -356,7 +386,7 @@ class FutsalReplaySystem:
             print(" No hay datos originales para procesar")
             return
             
-        print("🔬 Aplicando filtros avanzados...")
+        print(" Aplicando filtros avanzados...")
         
         # Inicializar filtro de Kalman
         if self.use_kalman_filter:
@@ -438,7 +468,11 @@ class FutsalReplaySystem:
                     # Verificar que hay al least 5 timestamps distintos para GPR
                     unique_timestamps = len(np.unique(recent_timestamps))
                     if unique_timestamps < 5:
-                        print(f"[DEBUG GPR] Entrenamiento omitido: solo {unique_timestamps}/5 timestamps únicos")
+                        # Limitar spam de logs: solo mostrar cada 50 intentos o si verbose_debug
+                        if self.verbose_debug or (self.debug_log_counter % 50 == 0):
+                            print(f"[DEBUG GPR] Entrenamiento omitido: solo {unique_timestamps}/5 timestamps únicos (intento {self.debug_log_counter + 1})")
+                        self.debug_log_counter += 1
+                        
                         # Fallback a interpolación lineal si pocos timestamps únicos
                         pos = self.linear_interpolation_fallback(
                             interpolated_positions, target_ms
@@ -715,10 +749,10 @@ class FutsalReplaySystem:
         """Dibujar posiciones de anclas UWB con diseño mejorado"""
         anchors = {
             'A10': (-1, -1, 'red', ''),        # Esquina Suroeste
-            'A20': (-1, 21, 'blue', '🔵'),       # Esquina Noroeste  
+            'A20': (-1, 21, 'blue', ''),       # Esquina Noroeste  
             'A30': (41, -1, 'green', ''),      # Esquina Sureste
-            'A40': (41, 21, 'orange', '🟠'),     # Esquina Noreste
-            'A50': (20, -1, 'purple', '🟣')      # Centro campo Sur
+            'A40': (41, 21, 'orange', ''),     # Esquina Noreste
+            'A50': (20, -1, 'purple', '')      # Centro campo Sur
         }
         
         for anchor_id, (x, y, color, emoji) in anchors.items():
@@ -1196,7 +1230,7 @@ def generate_movement_report(csv_file):
     print(f"\n REPORTE DE ANÁLISIS DE MOVIMIENTO")
     print("=" * 50)
     print(f"  Duración total: {total_time:.1f} segundos ({total_time/60:.1f} minutos)")
-    print(f"📏 Distancia recorrida: {total_distance:.1f} metros")
+    print(f" Distancia recorrida: {total_distance:.1f} metros")
     print(f" Velocidad promedio: {avg_speed:.2f} m/s")
     print(f" Velocidad máxima: {max_speed:.2f} m/s")
     print(f" Total de frames: {len(df)}")
@@ -1251,7 +1285,7 @@ def select_replay_file_interactive():
             
             # Determinar carpeta y icono
             if file_path.startswith("data/"):
-                folder_icon = "📥"
+                folder_icon = ""
                 folder_name = "data"
                 folder_desc = "(original)"
             else:
@@ -1261,7 +1295,7 @@ def select_replay_file_interactive():
             
             # Determinar si es un archivo bueno para replay (>15KB para datos UWB reales)
             if file_size > 15:
-                quality_icon = "⭐"
+                quality_icon = "*"
                 quality_desc = "RECOMENDADO"
             elif file_size > 5:
                 quality_icon = ""
@@ -1277,7 +1311,7 @@ def select_replay_file_interactive():
         except Exception as e:
             print(f"{i:2d}.  Error leyendo archivo: {file_path} - {e}")
     
-    print("💡 RECOMENDACIÓN: Selecciona archivos marcados con ⭐ para mejor experiencia")
+    print(" RECOMENDACION: Selecciona archivos marcados con * para mejor experiencia")
     print(f"\n 0.  Cancelar")
     
     while True:
@@ -1340,6 +1374,8 @@ Ejemplos de uso:
                        help='Optimizar memoria para datasets grandes (>1M filas)')
     parser.add_argument('--skip-trail', action='store_true',
                        help='Omitir trayectoria en tiempo real para reducir memoria')
+    parser.add_argument('--verbose-debug', action='store_true',
+                       help='Mostrar todos los logs de debug GPR (puede generar spam)')
     
     args = parser.parse_args()
     
@@ -1365,7 +1401,7 @@ Ejemplos de uso:
             generate_movement_report(selected_file)
             
             # Iniciar sistema de replay
-            replay_system = FutsalReplaySystem(selected_file, args.optimize_memory, args.skip_trail)
+            replay_system = FutsalReplaySystem(selected_file, args.optimize_memory, args.skip_trail, args.verbose_debug)
             replay_system.start_replay()
             
     except KeyboardInterrupt:
