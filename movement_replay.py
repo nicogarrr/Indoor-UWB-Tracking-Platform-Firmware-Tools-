@@ -14,11 +14,10 @@ from matplotlib.widgets import Button, Slider
 import argparse
 import sys
 import os
+import glob
 from datetime import datetime, timedelta
-import time
-from scipy.interpolate import CubicSpline, interp1d
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, WhiteKernel, Matern
+from sklearn.gaussian_process.kernels import WhiteKernel, Matern
 import warnings
 
 class KalmanPositionFilter:
@@ -135,8 +134,8 @@ class TrajectoryPredictor:
             self.is_trained = False
             return False
         
-        # Filtrar posiciones válidas
-        valid_indices = ~np.isnan(positions[:, 0])
+        # Filtrar posiciones válidas (excluir filas con x o y nulos)
+        valid_indices = ~np.any(np.isnan(positions), axis=1)
         valid_timestamps = timestamps[valid_indices]
         valid_positions = positions[valid_indices]
         
@@ -180,12 +179,21 @@ class TrajectoryPredictor:
             return True
             
         except Exception as e:
-            print(f"⚠️ Error en entrenamiento GPR: {e}")
+            print(f" Error en entrenamiento GPR: {e}")
             self.is_trained = False
             return False
     
     def predict(self, target_timestamps, max_speed=7.0):
-        """Predice posiciones para timestamps objetivo."""
+        """
+        Predice posiciones para timestamps objetivo usando GPR entrenado.
+        
+        Args:
+            target_timestamps: Lista de timestamps objetivo en millisegundos
+            max_speed: Velocidad máxima permitida en m/s (default: 7.0 m/s para fútbol sala)
+            
+        Returns:
+            List[[x, y]]: Lista de posiciones predichas, o None/[] si error
+        """
         if not self.is_trained or self.x_model is None or self.y_model is None:
             return None
         
@@ -194,6 +202,11 @@ class TrajectoryPredictor:
         
         # Normalizar timestamps objetivo
         ts_range = self.max_ts - self.min_ts
+        
+        # Validación adicional: evitar división por cero si solo hay un timestamp
+        if ts_range == 0:
+            return []
+        
         norm_ts = (np.array(target_timestamps) - self.min_ts) / ts_range
         norm_ts = norm_ts.reshape(-1, 1)
         
@@ -237,14 +250,14 @@ class TrajectoryPredictor:
 class FutsalReplaySystem:
     def __init__(self, csv_file):
         """Inicializar el sistema de replay avanzado"""
-        print("🔄 Cargando Sistema Avanzado de Replay UWB...")
+        print(" Cargando Sistema Avanzado de Replay UWB...")
         
         # Configuración avanzada
         self.use_kalman_filter = True
         self.use_ml_prediction = True
         self.trail_length = 100
         self.animation_step_ms = 20  # 50 FPS
-        self.max_speed = 7.0  # m/s (velocidad sprint fútbol sala)
+        self.max_player_speed = 7.0  # m/s (velocidad sprint fútbol sala - límite físico)
         self.interpolation_threshold = 100  # ms
         
         # Filtros y predictores
@@ -273,27 +286,27 @@ class FutsalReplaySystem:
             if missing_cols:
                 raise ValueError(f"Columnas faltantes: {missing_cols}")
             
-            print(f"✅ Datos originales cargados: {len(self.original_df)} registros")
+            print(f" Datos originales cargados: {len(self.original_df)} registros")
             
             # Aplicar filtros avanzados
             self.apply_advanced_filtering()
             
             if self.df is not None and len(self.df) > 0:
-                print(f"📊 Duración: {(self.df['timestamp'].iloc[-1] - self.df['timestamp'].iloc[0]).total_seconds():.1f} segundos")
-                print(f"🏃 Rango X: {self.df['x'].min():.1f} - {self.df['x'].max():.1f}m")
-                print(f"🏃 Rango Y: {self.df['y'].min():.1f} - {self.df['y'].max():.1f}m")
+                print(f" Duración: {(self.df['timestamp'].iloc[-1] - self.df['timestamp'].iloc[0]).total_seconds():.1f} segundos")
+                print(f" Rango X: {self.df['x'].min():.1f} - {self.df['x'].max():.1f}m")
+                print(f" Rango Y: {self.df['y'].min():.1f} - {self.df['y'].max():.1f}m")
             else:
-                print("⚠️ No se pudieron procesar los datos correctamente")
+                print(" No se pudieron procesar los datos correctamente")
                 sys.exit(1)
                 
         except Exception as e:
-            print(f"❌ Error cargando datos: {e}")
+            print(f" Error cargando datos: {e}")
             sys.exit(1)
     
     def apply_advanced_filtering(self):
         """Aplicar filtros avanzados: Kalman + ML + Interpolación"""
         if self.original_df is None:
-            print("⚠️ No hay datos originales para procesar")
+            print(" No hay datos originales para procesar")
             return
             
         print("🔬 Aplicando filtros avanzados...")
@@ -312,9 +325,9 @@ class FutsalReplaySystem:
         self.df = self.apply_intelligent_interpolation()
         
         if self.df is not None:
-            print(f"✅ Filtros aplicados: {len(self.df)} frames interpolados")
+            print(f" Filtros aplicados: {len(self.df)} frames interpolados")
         else:
-            print("⚠️ Error: No se pudieron aplicar los filtros")
+            print(" Error: No se pudieron aplicar los filtros")
     
     def find_first_valid_position(self):
         """Encuentra la primera posición válida en los datos"""
@@ -335,17 +348,16 @@ class FutsalReplaySystem:
         timestamps_ms = [(ts - self.original_df['timestamp'].iloc[0]).total_seconds() * 1000 
                          for ts in self.original_df['timestamp']]
         
-        # Crear timeline completo con step fijo
+        # Crear timeline completo con step fijo (incluir último instante)
         start_ms = 0
         end_ms = timestamps_ms[-1]
-        full_timeline = np.arange(start_ms, end_ms, self.animation_step_ms)
+        full_timeline = np.arange(start_ms, end_ms + self.animation_step_ms, self.animation_step_ms)
         
         # Preparar datos para interpolación
         positions = self.original_df[['x', 'y']].values
         
         # Identificar gaps grandes que requieren predicción ML
         interpolated_positions = []
-        last_valid_idx = 0
         
         for target_ms in full_timeline:
             # Encontrar datos válidos más cercanos
@@ -361,12 +373,10 @@ class FutsalReplaySystem:
                     pos = self.kalman_filter.process(pos, dt)
                 
                 interpolated_positions.append(pos)
-                last_valid_idx = len(interpolated_positions) - 1
                 
             else:
                 # Gap grande - usar predicción ML si está disponible
                 if (self.use_ml_prediction and 
-                    last_valid_idx >= 5 and 
                     len(interpolated_positions) >= 10):
                     
                     # Entrenar con datos recientes
@@ -374,22 +384,22 @@ class FutsalReplaySystem:
                     recent_timestamps = full_timeline[len(interpolated_positions)-10:len(interpolated_positions)]
                     
                     if self.trajectory_predictor.train(recent_timestamps, recent_positions):
-                        predictions = self.trajectory_predictor.predict([target_ms], self.max_speed)
+                        predictions = self.trajectory_predictor.predict([target_ms], self.max_player_speed)
                         if predictions:
                             pos = predictions[0]
                         else:
                             # Fallback a interpolación lineal
                             pos = self.linear_interpolation_fallback(
-                                interpolated_positions, target_ms, full_timeline, len(interpolated_positions)
+                                interpolated_positions, target_ms
                             )
                     else:
                         pos = self.linear_interpolation_fallback(
-                            interpolated_positions, target_ms, full_timeline, len(interpolated_positions)
+                            interpolated_positions, target_ms
                         )
                 else:
                     # Interpolación lineal simple
                     pos = self.linear_interpolation_fallback(
-                        interpolated_positions, target_ms, full_timeline, len(interpolated_positions)
+                        interpolated_positions, target_ms
                     )
                 
                 interpolated_positions.append(pos)
@@ -403,10 +413,29 @@ class FutsalReplaySystem:
             'tag_id': [self.original_df['tag_id'].iloc[0]] * len(full_timeline)
         })
         
+        # === OPTIMIZACIÓN: Cálculo previo de distancias ===
+        # Calcular distancias step by step usando numpy (más eficiente)
+        x_diff = interpolated_df['x'].diff()
+        y_diff = interpolated_df['y'].diff()
+        step_distances = np.hypot(x_diff, y_diff)
+        step_distances[0] = 0  # Primera distancia es 0 (sin diferencia previa)
+        interpolated_df['step_dist'] = step_distances
+        # Distancia acumulativa para acceso O(1) en update_frame
+        interpolated_df['cum_dist'] = interpolated_df['step_dist'].cumsum()
+        
         return interpolated_df
     
-    def linear_interpolation_fallback(self, positions_list, target_ms, timeline, current_idx):
-        """Fallback de interpolación lineal cuando ML no está disponible"""
+    def linear_interpolation_fallback(self, positions_list, target_ms):
+        """
+        Fallback de interpolación lineal cuando ML no está disponible.
+        
+        Args:
+            positions_list: Lista de posiciones [x, y] válidas anteriores
+            target_ms: Timestamp objetivo en millisegundos (no usado en cálculo)
+            
+        Returns:
+            [x, y]: Posición interpolada/extrapolada
+        """
         if len(positions_list) == 0:
             return [20.0, 10.0]  # Centro de cancha por defecto
         
@@ -422,8 +451,8 @@ class FutsalReplaySystem:
             dx = last_pos[0] - prev_pos[0]
             dy = last_pos[1] - prev_pos[1]
             
-            # Limitar extrapolación para evitar movimientos erráticos
-            max_extrapolation = 0.5  # metros
+            # Limitar extrapolación vinculada a la frecuencia de muestreo
+            max_extrapolation = 0.5 * (self.animation_step_ms / 20)  # metros
             distance = np.sqrt(dx*dx + dy*dy)
             if distance > max_extrapolation:
                 scale = max_extrapolation / distance
@@ -442,13 +471,13 @@ class FutsalReplaySystem:
         # Verificar si el manager existe antes de intentar establecer el título
         try:
             if hasattr(self.fig.canvas, 'manager') and self.fig.canvas.manager is not None:
-                self.fig.canvas.manager.set_window_title('🏟️ Sistema de Replay UWB - Fútbol Sala Profesional')
+                self.fig.canvas.manager.set_window_title(' Sistema de Replay UWB - Fútbol Sala Profesional')
         except:
             pass  # Ignorar si no se puede establecer el título
         
-        # Configurar cancha de fútbol sala (40x20m) con márgenes para anclas
+        # Configurar cancha de fútbol sala (40x20m) con márgenes amplios
         self.ax.set_xlim(-4, 44)
-        self.ax.set_ylim(-4, 24)
+        self.ax.set_ylim(-6, 24)  # Mucho más espacio abajo para zona actual
         self.ax.set_aspect('equal')
         
         # Color de fondo - Pabellón deportivo
@@ -622,9 +651,9 @@ class FutsalReplaySystem:
     def draw_uwb_anchors(self):
         """Dibujar posiciones de anclas UWB con diseño mejorado"""
         anchors = {
-            'A10': (-1, -1, 'red', '🔴'),        # Esquina Suroeste
+            'A10': (-1, -1, 'red', ''),        # Esquina Suroeste
             'A20': (-1, 21, 'blue', '🔵'),       # Esquina Noroeste  
-            'A30': (41, -1, 'green', '🟢'),      # Esquina Sureste
+            'A30': (41, -1, 'green', ''),      # Esquina Sureste
             'A40': (41, 21, 'orange', '🟠'),     # Esquina Noreste
             'A50': (20, -1, 'purple', '🟣')      # Centro campo Sur
         }
@@ -686,45 +715,40 @@ class FutsalReplaySystem:
         self.ax.add_patch(self.speed_indicator)
         
         # === ZONA ACTUAL ===
-        self.current_zone = self.ax.text(20, -1.8, '', ha='center', va='center',
-                                       fontsize=14, color='white', fontweight='bold',
-                                       bbox=dict(boxstyle='round,pad=0.8', 
+        # Posicionado muy abajo para evitar solapamiento total
+        self.current_zone = self.ax.text(20, -4.5, '', ha='center', va='center',
+                                       fontsize=10, color='white', fontweight='bold',
+                                       bbox=dict(boxstyle='round,pad=0.4', 
                                                facecolor='black', alpha=0.9,
-                                               edgecolor='yellow', linewidth=2))
+                                               edgecolor='yellow', linewidth=1))
         
-        # === MAPA DE CALOR (básico) ===
-        self.heat_positions = []  # Para almacenar posiciones para mapa de calor
+        # === MAPA DE CALOR ===
+        # Eliminado para optimización de memoria - usar directamente self.df si se necesita
         
     def setup_info_panel(self):
         """Configurar panel de información en tiempo real"""
-        # Panel de información (esquina superior izquierda)
-        info_text = ("🏟️ SISTEMA DE REPLAY UWB - FÚTBOL SALA\n"
-                    "⌨️  CONTROLES:\n"
-                    "   SPACE: ⏯️  Play/Pause\n"
-                    "   ←/→: Frame anterior/siguiente\n"
-                    "   ↑/↓: Velocidad +/-\n"
-                    "   R: 🔄 Reiniciar\n"
-                    "   Q: ❌ Salir")
+        # Panel de información COMPACTO (esquina superior izquierda)
+        info_text = ("CONTROLES: SPACE=Play/Pause | ←→=Frame | ↑↓=Velocidad | R=Reset | Q=Salir")
         
         self.info_panel = self.ax.text(0.02, 0.98, info_text, transform=self.ax.transAxes,
-                                     va='top', ha='left', fontsize=10, color='white',
-                                     bbox=dict(boxstyle='round,pad=0.8', 
-                                             facecolor='black', alpha=0.9))
+                                     va='top', ha='left', fontsize=9, color='white',
+                                     bbox=dict(boxstyle='round,pad=0.4', 
+                                             facecolor='black', alpha=0.8))
         
-        # Panel de estadísticas (esquina inferior derecha)
-        self.stats_panel = self.ax.text(0.98, 0.02, '', transform=self.ax.transAxes,
-                                      va='bottom', ha='right', fontsize=10, color='white',
-                                      bbox=dict(boxstyle='round,pad=0.5', 
-                                              facecolor='navy', alpha=0.9))
+        # Panel de estadísticas (lado izquierdo, debajo de controles)
+        self.stats_panel = self.ax.text(0.02, 0.88, '', transform=self.ax.transAxes,
+                                      va='top', ha='left', fontsize=8, color='white',
+                                      bbox=dict(boxstyle='round,pad=0.3', 
+                                              facecolor='darkgreen', alpha=0.85))
         
     def setup_animation_controls(self):
-        """Configurar controles de animación"""
+        """Configurar controles de animación con velocidades 0.1x-10x"""
         self.current_frame = 0
         self.total_frames = len(self.df) if self.df is not None else 0
         self.is_playing = False
         self.playback_speed = 1.0
-        self.max_speed = 10.0
-        self.min_speed = 0.1
+        self.max_playback_speed = 10.0  # Velocidad máxima de reproducción (10x)
+        self.min_speed = 0.1            # Velocidad mínima de reproducción (0.1x)
         
         # Conectar eventos de teclado
         self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
@@ -733,27 +757,27 @@ class FutsalReplaySystem:
         """Determinar la zona actual del jugador con zonas más específicas"""
         # Portería izquierda (área de 6m)
         if x <= 6 and 4 <= y <= 16:
-            return "🥅 ÁREA PORTERÍA LOCAL"
+            return "ÁREA LOCAL"
         # Portería derecha (área de 6m)
         elif x >= 34 and 4 <= y <= 16:
-            return "🥅 ÁREA PORTERÍA VISITANTE"
+            return "ÁREA VISITANTE"
         # Círculo central
         elif 17 <= x <= 23 and 7 <= y <= 13:
-            return "⚽ CÍRCULO CENTRAL"
+            return "CENTRO"
         # Zona defensiva local
         elif x <= 13.33:
-            return "🛡️ ZONA DEFENSIVA LOCAL"
+            return "DEFENSA"
         # Zona media
         elif 13.33 < x <= 26.67:
-            return "⚔️ ZONA MEDIA"
+            return "MEDIO"
         # Zona ofensiva
         elif x > 26.67:
-            return "⚡ ZONA OFENSIVA"
+            return "ATAQUE"
         # Fuera de banda
         elif x < 0 or x > 40 or y < 0 or y > 20:
-            return "🚫 FUERA DE JUEGO"
+            return "FUERA"
         else:
-            return "🏃 EN JUEGO"
+            return "JUEGO"
     
     def calculate_speed(self, frame_idx):
         """Calcular velocidad instantánea"""
@@ -771,10 +795,12 @@ class FutsalReplaySystem:
         # Tiempo transcurrido
         dt = (current_row['timestamp'] - prev_row['timestamp']).total_seconds()
         
-        if dt > 0:
-            speed = distance / dt  # m/s
-            return speed
-        return 0.0
+        # Prevención de división entre cero
+        if dt == 0 or dt <= 0:
+            return 0.0
+            
+        speed = distance / dt  # m/s
+        return speed
     
     def update_frame(self, frame_idx):
         """Actualizar visualización para el frame actual"""
@@ -823,64 +849,47 @@ class FutsalReplaySystem:
         self.current_zone.set_text(zone)
         
         # Cambiar color de la zona según el área
-        if "PORTERÍA" in zone:
+        if "ÁREA" in zone:
             zone_color = 'red'
             zone_edge = 'yellow'
-        elif "DEFENSIVA" in zone:
+        elif "DEFENSA" in zone:
             zone_color = 'blue'
             zone_edge = 'lightblue'
-        elif "OFENSIVA" in zone:
+        elif "ATAQUE" in zone:
             zone_color = 'orangered'
             zone_edge = 'orange'
-        elif "CENTRAL" in zone or "MEDIA" in zone:
+        elif "CENTRO" in zone or "MEDIO" in zone:
             zone_color = 'green'
             zone_edge = 'lightgreen'
         else:
             zone_color = 'black'
             zone_edge = 'yellow'
         
-        self.current_zone.set_bbox(dict(boxstyle='round,pad=0.8', 
-                                      facecolor=zone_color, alpha=0.9,
-                                      edgecolor=zone_edge, linewidth=2))
+        self.current_zone.set_bbox(dict(boxstyle='round,pad=0.5', 
+                                      facecolor=zone_color, alpha=0.85,
+                                      edgecolor=zone_edge, linewidth=1.5))
         
-        # === ALMACENAR PARA MAPA DE CALOR ===
-        self.heat_positions.append((x, y))
-        if len(self.heat_positions) > 1000:  # Mantener últimas 1000 posiciones
-            self.heat_positions.pop(0)
+        # === MAPA DE CALOR ===
+        # Optimización: Eliminado almacenamiento en memoria - datos disponibles en self.df
         
         # === ESTADÍSTICAS AVANZADAS ===
         elapsed_time = (timestamp - self.df['timestamp'].iloc[0]).total_seconds()
         progress = (frame_idx / self.total_frames) * 100
         
-        # Calcular distancia total hasta ahora
-        if frame_idx > 0:
-            distances = []
-            for i in range(1, frame_idx + 1):
-                curr = self.df.iloc[i]
-                prev = self.df.iloc[i-1]
-                dist = np.sqrt((curr['x'] - prev['x'])**2 + (curr['y'] - prev['y'])**2)
-                distances.append(dist)
-            total_distance = sum(distances)
-        else:
-            total_distance = 0
+        # === OPTIMIZACIÓN: Usar distancia acumulativa precalculada ===
+        total_distance = self.df['cum_dist'].iloc[frame_idx] if frame_idx < len(self.df) else 0
         
         # Clasificación de velocidad
         if speed < 1.0:
             speed_class = "🚶 CAMINANDO"
         elif speed < 3.0:
-            speed_class = "🏃 TROTE"
+            speed_class = " TROTE"
         elif speed < 5.0:
             speed_class = "💨 CARRERA"
         else:
-            speed_class = "⚡ SPRINT"
+            speed_class = " SPRINT"
         
-        stats_text = (f"⏱️  TIEMPO: {elapsed_time:.1f}s\n"
-                     f"📍 POSICIÓN: ({x:.1f}, {y:.1f})m\n"
-                     f"🏃 VELOCIDAD: {speed:.2f} m/s ({speed_class})\n"
-                     f"📏 DIST. TOTAL: {total_distance:.1f}m\n"
-                     f"🎯 FRAME: {frame_idx + 1}/{self.total_frames}\n"
-                     f"📊 PROGRESO: {progress:.1f}%\n"
-                     f"⚡ VEL. REPR.: {self.playback_speed:.1f}x")
+        stats_text = (f"⏱️ {elapsed_time:.1f}s | 📍({x:.1f},{y:.1f}) | {speed_class} {speed:.1f}m/s | 📏{total_distance:.0f}m | {frame_idx + 1}/{self.total_frames} | {progress:.0f}% | ⚡{self.playback_speed:.1f}x")
         
         self.stats_panel.set_text(stats_text)
         
@@ -888,20 +897,24 @@ class FutsalReplaySystem:
         title_color = 'lightgreen' if self.is_playing else 'orange'
         status_icon = '▶️' if self.is_playing else '⏸️'
         
-        self.ax.set_title(f"🏟️ Replay UWB - Fútbol Sala Profesional | {timestamp.strftime('%H:%M:%S.%f')[:-3]} | {status_icon}",
-                         fontsize=16, fontweight='bold', color=title_color,
-                         bbox=dict(boxstyle='round,pad=0.5', facecolor='black', alpha=0.8))
+        self.ax.set_title(f"{status_icon} {timestamp.strftime('%H:%M:%S.%f')[:-3]}",
+                         fontsize=12, fontweight='bold', color=title_color,
+                         bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
         
         return [self.player_dot, self.player_number, self.trail_line, self.trail_shadow, 
                 self.trail_dots, self.current_zone, self.stats_panel, 
                 self.speed_indicator]
     
     def animate(self, frame):
-        """Función de animación principal"""
+        """Función de animación principal con control de velocidad mejorado"""
         if self.is_playing:
-            # Avanzar frame según velocidad de reproducción
-            step = max(1, int(self.playback_speed))
-            self.current_frame = min(self.current_frame + step, self.total_frames - 1)
+            # Siempre avanzar 1 frame, la velocidad se controla por el intervalo
+            self.current_frame = min(self.current_frame + 1, self.total_frames - 1)
+            
+            # Actualizar intervalo de animación según velocidad
+            if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
+                new_interval = max(5, int(40 / self.playback_speed))  # 40ms base / velocidad
+                self.anim.event_source.interval = new_interval
             
             # Pausar automáticamente al final
             if self.current_frame >= self.total_frames - 1:
@@ -913,31 +926,41 @@ class FutsalReplaySystem:
         """Manejar eventos de teclado"""
         if event.key == ' ':  # Space - Play/Pause
             self.is_playing = not self.is_playing
-            print(f"▶️ Reproducción: {'Iniciada' if self.is_playing else 'Pausada'}")
+            print(f"Reproducción: {'Iniciada' if self.is_playing else 'Pausada'}")
             
         elif event.key == 'left':  # Flecha izquierda - Frame anterior
             self.current_frame = max(0, self.current_frame - 1)
-            print(f"⬅️ Frame: {self.current_frame + 1}/{self.total_frames}")
+            print(f" Frame: {self.current_frame + 1}/{self.total_frames}")
             
         elif event.key == 'right':  # Flecha derecha - Frame siguiente
             self.current_frame = min(self.total_frames - 1, self.current_frame + 1)
-            print(f"➡️ Frame: {self.current_frame + 1}/{self.total_frames}")
+            print(f" Frame: {self.current_frame + 1}/{self.total_frames}")
             
         elif event.key == 'up':  # Flecha arriba - Aumentar velocidad
-            self.playback_speed = min(self.max_speed, self.playback_speed + 0.5)
-            print(f"⚡ Velocidad: {self.playback_speed:.1f}x")
+            self.playback_speed = min(self.max_playback_speed, self.playback_speed + 0.5)
+            print(f" Velocidad: {self.playback_speed:.1f}x")
+            # Sincronizar slider evitando callback recursivo
+            if hasattr(self, 'speed_slider'):
+                self.speed_slider.eventson = False
+                self.speed_slider.set_val(self.playback_speed)
+                self.speed_slider.eventson = True
             
         elif event.key == 'down':  # Flecha abajo - Reducir velocidad
             self.playback_speed = max(self.min_speed, self.playback_speed - 0.5)
-            print(f"🐌 Velocidad: {self.playback_speed:.1f}x")
+            print(f" Velocidad: {self.playback_speed:.1f}x")
+            # Sincronizar slider evitando callback recursivo
+            if hasattr(self, 'speed_slider'):
+                self.speed_slider.eventson = False
+                self.speed_slider.set_val(self.playback_speed)
+                self.speed_slider.eventson = True
             
         elif event.key == 'r':  # R - Reiniciar
             self.current_frame = 0
             self.is_playing = False
-            print("🔄 Replay reiniciado")
+            print(" Replay reiniciado")
             
         elif event.key == 'q':  # Q - Salir
-            print("❌ Cerrando replay...")
+            print(" Cerrando replay...")
             plt.close(self.fig)
             
         # Actualizar visualización inmediatamente
@@ -947,15 +970,15 @@ class FutsalReplaySystem:
     
     def start_replay(self):
         """Iniciar el sistema de replay"""
-        print("\n🎬 Iniciando Sistema de Replay UWB")
-        print("═" * 50)
-        print("⌨️  Usa las teclas para controlar la reproducción:")
-        print("   SPACE: ⏯️  Play/Pause")
+        print("\n Iniciando Sistema de Replay UWB")
+        print("=" * 50)
+        print("  Usa las teclas para controlar la reproducción:")
+        print("   SPACE:   Play/Pause")
         print("   ←/→: Frame anterior/siguiente") 
         print("   ↑/↓: Velocidad +/-")
-        print("   R: 🔄 Reiniciar")
-        print("   Q: ❌ Salir")
-        print("═" * 50)
+        print("   R:  Reiniciar")
+        print("   Q:  Salir")
+        print("=" * 50)
         
         # Configurar animación
         self.anim = FuncAnimation(
@@ -969,36 +992,50 @@ class FutsalReplaySystem:
         plt.show()
 
     def setup_interactive_controls(self):
-        """Configurar controles interactivos avanzados"""
-        # Área para controles interactivos (sliders, botones)
-        plt.subplots_adjust(bottom=0.2)
+        """Configurar controles interactivos avanzados con slider 0.1x-10x"""
+        # Área para controles interactivos (espacio optimizado)
+        plt.subplots_adjust(bottom=0.12, top=0.94)
         
-        # Slider para velocidad de reproducción
-        ax_speed = plt.axes((0.2, 0.02, 0.3, 0.03))
-        self.speed_slider = Slider(ax_speed, 'Velocidad', 0.1, 5.0, valinit=1.0)
+        # Slider para velocidad de reproducción (rango 0.1x a 10x)
+        ax_speed = plt.axes((0.15, 0.05, 0.35, 0.025))
+        self.speed_slider = Slider(ax_speed, 'Velocidad', 0.1, self.max_playback_speed, valinit=1.0)
         self.speed_slider.on_changed(self.update_speed)
         
-        # Botón para activar/desactivar filtros
-        ax_kalman = plt.axes((0.55, 0.02, 0.1, 0.04))
+        # Botón para activar/desactivar filtros (separados más)
+        ax_kalman = plt.axes((0.55, 0.05, 0.08, 0.03))
         self.kalman_button = Button(ax_kalman, 'Kalman')
         self.kalman_button.on_clicked(self.toggle_kalman)
         
         # Botón para activar/desactivar ML
-        ax_ml = plt.axes((0.67, 0.02, 0.1, 0.04))
+        ax_ml = plt.axes((0.65, 0.05, 0.08, 0.03))
         self.ml_button = Button(ax_ml, 'ML Pred')
         self.ml_button.on_clicked(self.toggle_ml)
+        
+        # Etiqueta de información de controles (pequeña)
+        ax_info = plt.axes((0.75, 0.05, 0.22, 0.03))
+        ax_info.text(0.5, 0.5, 'Usa teclado para control fino', 
+                    ha='center', va='center', fontsize=8, color='gray',
+                    transform=ax_info.transAxes)
+        ax_info.set_xticks([])
+        ax_info.set_yticks([])
+        ax_info.patch.set_alpha(0)
         
         # Actualizar colores de botones según estado
         self.update_button_colors()
     
     def update_speed(self, val):
-        """Actualizar velocidad de reproducción"""
-        self.playback_speed = val
+        """
+        Actualizar velocidad de reproducción con límites seguros.
+        
+        Args:
+            val: Valor del slider (0.1 a 10.0)
+        """
+        self.playback_speed = np.clip(val, 0.1, self.max_playback_speed)
     
     def toggle_kalman(self, event):
         """Activar/desactivar filtro de Kalman"""
         self.use_kalman_filter = not self.use_kalman_filter
-        print(f"🔧 Filtro de Kalman: {'Activado' if self.use_kalman_filter else 'Desactivado'}")
+        print(f" Filtro de Kalman: {'Activado' if self.use_kalman_filter else 'Desactivado'}")
         self.update_button_colors()
         
         # Recargar datos con nuevo filtro
@@ -1014,12 +1051,25 @@ class FutsalReplaySystem:
         self.apply_advanced_filtering()
     
     def update_button_colors(self):
-        """Actualizar colores de botones según estado"""
+        """Actualizar colores de botones y texto según estado"""
+        # Colores de fondo
         kalman_color = 'lightgreen' if self.use_kalman_filter else 'lightcoral'
         ml_color = 'lightblue' if self.use_ml_prediction else 'lightcoral'
         
-        self.kalman_button.color = kalman_color
-        self.ml_button.color = ml_color
+        # Colores de texto (mejor contraste)
+        kalman_text_color = 'darkgreen' if self.use_kalman_filter else 'darkred'
+        ml_text_color = 'darkblue' if self.use_ml_prediction else 'darkred'
+        
+        # Actualizar fondo de botones
+        self.kalman_button.ax.set_facecolor(kalman_color)
+        self.ml_button.ax.set_facecolor(ml_color)
+        
+        # Actualizar color del texto para máxima claridad
+        self.kalman_button.label.set_color(kalman_text_color)
+        self.ml_button.label.set_color(ml_text_color)
+        
+        # Refrescar UI al instante
+        self.fig.canvas.draw_idle()
 
 def generate_movement_report(csv_file):
     """Generar reporte de análisis de movimiento"""
@@ -1029,41 +1079,41 @@ def generate_movement_report(csv_file):
     # Calcular estadísticas
     total_time = (df['timestamp'].iloc[-1] - df['timestamp'].iloc[0]).total_seconds()
     
-    # Distancia total recorrida
-    distances = []
-    for i in range(1, len(df)):
-        dx = df['x'].iloc[i] - df['x'].iloc[i-1]
-        dy = df['y'].iloc[i] - df['y'].iloc[i-1]
-        distances.append(np.sqrt(dx**2 + dy**2))
+    # === OPTIMIZACIÓN: Cálculo eficiente de distancias ===
+    # Usar numpy hypot para mejor rendimiento
+    x_diff = df['x'].diff()
+    y_diff = df['y'].diff()
+    step_distances = np.hypot(x_diff, y_diff)
+    step_distances[0] = 0  # Primera distancia es 0
     
-    total_distance = sum(distances)
+    total_distance = step_distances.sum()
     avg_speed = total_distance / total_time if total_time > 0 else 0
-    max_speed = max(distances) * 25 if distances else 0  # Asumiendo 25 Hz
     
-    print(f"\n📊 REPORTE DE ANÁLISIS DE MOVIMIENTO")
-    print("═" * 50)
-    print(f"⏱️  Duración total: {total_time:.1f} segundos ({total_time/60:.1f} minutos)")
+    # Calcular frecuencia real en lugar de asumir 25 Hz
+    freq = len(df) / total_time if total_time > 0 else 25
+    max_speed = step_distances.max() * freq if len(step_distances) > 0 else 0
+    
+    print(f"\n REPORTE DE ANÁLISIS DE MOVIMIENTO")
+    print("=" * 50)
+    print(f"  Duración total: {total_time:.1f} segundos ({total_time/60:.1f} minutos)")
     print(f"📏 Distancia recorrida: {total_distance:.1f} metros")
-    print(f"🏃 Velocidad promedio: {avg_speed:.2f} m/s")
-    print(f"⚡ Velocidad máxima: {max_speed:.2f} m/s")
-    print(f"📊 Total de frames: {len(df)}")
-    print(f"🔄 Frecuencia de muestreo: ~{len(df)/total_time:.1f} Hz")
-    print("═" * 50)
+    print(f" Velocidad promedio: {avg_speed:.2f} m/s")
+    print(f" Velocidad máxima: {max_speed:.2f} m/s")
+    print(f" Total de frames: {len(df)}")
+    print(f" Frecuencia de muestreo: ~{len(df)/total_time:.1f} Hz")
+    print("=" * 50)
 
 def select_replay_file_interactive():
     """
     Selección interactiva de archivos para replay con validación mejorada
     """
-    import os
-    import glob
-    from datetime import datetime
     
-    print("\n🎬 SELECCIONAR ARCHIVO PARA REPLAY UWB")
+    print("\n SELECCIONAR ARCHIVO PARA REPLAY UWB")
     print("=" * 70)
     print("📍 Ubicación de archivos:")
-    print(f"   🗂️  Directorio actual: {os.getcwd()}")
-    print(f"   📁 data/: Datos originales sin procesar")
-    print(f"   📊 processed_data/: Datos ya procesados y filtrados")
+    print(f"     Directorio actual: {os.getcwd()}")
+    print(f"    data/: Datos originales sin procesar")
+    print(f"    processed_data/: Datos ya procesados y filtrados")
     print("=" * 70)
     
     # Buscar archivos en ambos directorios
@@ -1082,14 +1132,14 @@ def select_replay_file_interactive():
                 data_files.append(file_path)
     
     if not data_files:
-        print("❌ No se encontraron archivos CSV válidos")
+        print(" No se encontraron archivos CSV válidos")
         print("💡 Asegúrate de tener archivos .csv en las carpetas 'data/' o 'processed_data/'")
         return None
     
     # Ordenar por tamaño (archivos más grandes primero, más útiles para replay)
     data_files.sort(key=lambda x: os.path.getsize(x), reverse=True)
     
-    print(f"\n📋 ARCHIVOS DISPONIBLES ({len(data_files)} encontrados):")
+    print(f"\n ARCHIVOS DISPONIBLES ({len(data_files)} encontrados):")
     print("=" * 70)
     
     for i, file_path in enumerate(data_files, 1):
@@ -1105,37 +1155,37 @@ def select_replay_file_interactive():
                 folder_name = "data"
                 folder_desc = "(original)"
             else:
-                folder_icon = "📊"
+                folder_icon = ""
                 folder_name = "processed_data"
                 folder_desc = "(procesado)"
             
-            # Determinar si es un archivo bueno para replay (>50KB)
-            if file_size > 50:
+            # Determinar si es un archivo bueno para replay (>15KB para datos UWB reales)
+            if file_size > 15:
                 quality_icon = "⭐"
                 quality_desc = "RECOMENDADO"
             elif file_size > 5:
-                quality_icon = "✅"
+                quality_icon = ""
                 quality_desc = "BUENO"
             else:
-                quality_icon = "⚠️"
+                quality_icon = ""
                 quality_desc = "PEQUEÑO"
             
             print(f"{i:2d}. {quality_icon} {folder_icon} {folder_name}/{file_name:<35}")
-            print(f"    📊 {file_size:7.1f}KB | 📅 {mod_date} | 🎯 {quality_desc}")
+            print(f"     {file_size:7.1f}KB |  {mod_date} |  {quality_desc}")
             print()
             
         except Exception as e:
-            print(f"{i:2d}. ❌ Error leyendo archivo: {file_path}")
+            print(f"{i:2d}.  Error leyendo archivo: {file_path} - {e}")
     
     print("💡 RECOMENDACIÓN: Selecciona archivos marcados con ⭐ para mejor experiencia")
-    print(f"\n 0. ❌ Cancelar")
+    print(f"\n 0.  Cancelar")
     
     while True:
         try:
             choice = input(f"\n👆 Selecciona un archivo (1-{len(data_files)}) o 0 para cancelar: ").strip()
             
             if choice == '0':
-                print("❌ Operación cancelada")
+                print(" Operación cancelada")
                 return None
             
             file_idx = int(choice) - 1
@@ -1144,33 +1194,33 @@ def select_replay_file_interactive():
                 
                 # Verificar que el archivo existe y validar contenido
                 if not os.path.exists(selected_file):
-                    print(f"❌ Error: El archivo seleccionado no existe: {selected_file}")
+                    print(f" Error: El archivo seleccionado no existe: {selected_file}")
                     continue
                 
                 # Mostrar información del archivo seleccionado
                 file_size = os.path.getsize(selected_file) / 1024
                 folder_name = "data" if selected_file.startswith("data/") else "processed_data"
                 
-                print(f"\n✅ ARCHIVO SELECCIONADO:")
-                print(f"   📁 Ubicación: {folder_name}/{os.path.basename(selected_file)}")
-                print(f"   📊 Tamaño: {file_size:.1f} KB")
-                print(f"   🗂️  Ruta completa: {os.path.abspath(selected_file)}")
+                print(f"✓ ARCHIVO SELECCIONADO:")
+                print(f"    Ubicación: {folder_name}/{os.path.basename(selected_file)}")
+                print(f"    Tamaño: {file_size:.1f} KB")
+                print(f"     Ruta completa: {os.path.abspath(selected_file)}")
                 
                 return selected_file
             else:
-                print(f"⚠️  Número inválido. Ingresa un número entre 1 y {len(data_files)}")
+                print(f"  Número inválido. Ingresa un número entre 1 y {len(data_files)}")
                 
         except ValueError:
-            print("⚠️  Por favor ingresa un número válido")
+            print("  Por favor ingresa un número válido")
         except KeyboardInterrupt:
-            print("\n❌ Operación cancelada")
+            print("✗ Operación cancelada")
             return None
 
 
 def main():
     """Función principal"""
     parser = argparse.ArgumentParser(
-        description='🏟️ Sistema de Replay UWB para Fútbol Sala',
+        description=' Sistema de Replay UWB para Fútbol Sala',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ejemplos de uso:
@@ -1191,7 +1241,7 @@ Ejemplos de uso:
     if args.csv_file:
         # Archivo especificado por parámetro
         if not os.path.exists(args.csv_file):
-            print(f"❌ Error: No se encontró el archivo '{args.csv_file}'")
+            print(f" Error: No se encontró el archivo '{args.csv_file}'")
             return
         selected_file = args.csv_file
     else:
@@ -1213,9 +1263,9 @@ Ejemplos de uso:
             replay_system.start_replay()
             
     except KeyboardInterrupt:
-        print("\n👋 Sistema de replay finalizado por el usuario")
+        print("\n Sistema de replay finalizado por el usuario")
     except Exception as e:
-        print(f"❌ Error durante el replay: {e}")
+        print(f" Error durante el replay: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

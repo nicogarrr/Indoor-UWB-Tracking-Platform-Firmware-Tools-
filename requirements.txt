@@ -39,6 +39,9 @@ bokeh>=2.4.0
 # Optional: For performance monitoring
 psutil>=5.9.0
 
+# 🚀 OPTIMIZACIÓN CRÍTICA: JIT compilation (10-100x más rápido)
+numba>=0.56.0
+
 # WordPress integration and web automation
 requests>=2.28.0
 watchdog>=2.1.0
