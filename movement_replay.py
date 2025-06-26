@@ -132,6 +132,7 @@ class TrajectoryPredictor:
         """Entrena los modelos GPR usando datos históricos."""
         if len(timestamps) < self.min_samples_required:
             self.is_trained = False
+            print(f"[DEBUG GPR] Entrenamiento rechazado: {len(timestamps)}/{self.min_samples_required} muestras válidas")
             return False
         
         # Filtrar posiciones válidas (excluir filas con x o y nulos)
@@ -140,6 +141,7 @@ class TrajectoryPredictor:
         valid_positions = positions[valid_indices]
         
         if len(valid_timestamps) < self.min_samples_required:
+            print(f"[DEBUG GPR] Entrenamiento rechazado: {len(valid_timestamps)}/{self.min_samples_required} muestras válidas")
             self.is_trained = False
             return False
         
@@ -149,6 +151,7 @@ class TrajectoryPredictor:
         ts_range = self.max_ts - self.min_ts
         
         if ts_range <= 0:
+            print(f"[DEBUG GPR] Entrenamiento rechazado: rango temporal insuficiente ({ts_range})")
             self.is_trained = False
             return False
         
@@ -178,10 +181,11 @@ class TrajectoryPredictor:
                 self.y_model.fit(norm_timestamps, valid_positions[:, 1])
                 
             self.is_trained = True
+            print(f"[DEBUG GPR] Entrenado exitosamente con {len(valid_timestamps)} muestras")
             return True
             
         except Exception as e:
-            print(f" Error en entrenamiento GPR: {e}")
+            print(f"[DEBUG GPR] Error en entrenamiento: {e}")
             self.is_trained = False
             return False
     
@@ -250,14 +254,30 @@ class TrajectoryPredictor:
         return predictions
 
 class FutsalReplaySystem:
-    def __init__(self, csv_file):
-        """Inicializar el sistema de replay avanzado"""
+    def __init__(self, csv_file, optimize_memory=False, skip_trail=False):
+        """
+        Inicializar el sistema de replay avanzado
+        
+        Args:
+            csv_file: Archivo CSV con datos de movimiento
+            optimize_memory: Flag para optimizar memoria en datasets grandes (>1M filas)
+            skip_trail: Flag para omitir trayectoria en tiempo real (reduce memoria)
+        """
         print(" Cargando Sistema Avanzado de Replay UWB...")
         
         # Configuración avanzada
         self.use_kalman_filter = True
         self.use_ml_prediction = True
-        self.trail_length = 100
+        self.optimize_memory = optimize_memory
+        self.skip_trail = skip_trail
+        
+        # Ajustar parámetros según optimización de memoria
+        if optimize_memory:
+            self.trail_length = 50  # Reducir trail para datasets grandes
+            print(" Modo optimización de memoria activado (trail reducido)")
+        else:
+            self.trail_length = 100
+            
         self.animation_step_ms = 20  # 50 FPS
         self.max_player_speed = 7.0  # m/s (velocidad sprint fútbol sala - límite físico)
         self.interpolation_threshold = 100  # ms
@@ -279,7 +299,32 @@ class FutsalReplaySystem:
     def load_data(self, csv_file):
         """Cargar y procesar datos CSV con filtros avanzados"""
         try:
+            # === OPTIMIZACIÓN DE MEMORIA: Detección de datasets grandes ===
+            file_size_mb = os.path.getsize(csv_file) / (1024 * 1024)
+            print(f" Tamaño del archivo: {file_size_mb:.1f} MB")
+            
+            if file_size_mb > 20:  # Datasets >20MB pueden generar ~100MB+ en memoria
+                print("⚠️  ADVERTENCIA: Dataset grande detectado")
+                print(f"   Archivo: {file_size_mb:.1f} MB → Memoria estimada: ~{file_size_mb * 5:.0f} MB")
+                print("   Considera usar --optimize-memory para datasets >50MB")
+                
+                if not self.optimize_memory and file_size_mb > 50:
+                    print("🔴 RECOMENDACIÓN CRÍTICA: Activa optimización de memoria")
+                    print("   python movement_replay.py --optimize-memory [archivo]")
+            
             self.original_df = pd.read_csv(csv_file)
+            
+            # Verificar número de filas para memoria
+            num_rows = len(self.original_df)
+            print(f" Registros originales: {num_rows:,}")
+            
+            if num_rows > 500_000:  # >500k filas pueden usar mucha RAM
+                estimated_memory_gb = (num_rows * 5) / 1_000_000  # Estimación conservadora
+                print(f"⚠️  Memoria estimada: ~{estimated_memory_gb:.1f} GB después del procesamiento")
+                
+                if num_rows > 1_000_000 and not self.optimize_memory:
+                    print("🔴 DATASET CRÍTICO: >1M filas. Recomendado reiniciar con --optimize-memory")
+            
             self.original_df['timestamp'] = pd.to_datetime(self.original_df['timestamp'])
             
             # Validar datos
@@ -381,13 +426,19 @@ class FutsalReplaySystem:
                 if (self.use_ml_prediction and 
                     len(interpolated_positions) >= 10):
                     
-                    # Entrenar con datos recientes (verificar timestamps distintos)
+                    # === OPTIMIZACIÓN: Usar índices directos en lugar de slice costoso ===
+                    # Entrenar con datos recientes (evitar slice en arrays grandes)
                     recent_positions = np.array(interpolated_positions[-10:])
-                    recent_timestamps = full_timeline[len(interpolated_positions)-10:len(interpolated_positions)]
                     
-                    # Verificar que hay al menos 5 timestamps distintos para GPR
+                    # Calcular índices directos para evitar slice costoso de full_timeline
+                    current_idx = len(interpolated_positions)
+                    start_idx = current_idx - 10
+                    recent_timestamps = np.array([full_timeline[i] for i in range(start_idx, current_idx)])
+                    
+                    # Verificar que hay al least 5 timestamps distintos para GPR
                     unique_timestamps = len(np.unique(recent_timestamps))
                     if unique_timestamps < 5:
+                        print(f"[DEBUG GPR] Entrenamiento omitido: solo {unique_timestamps}/5 timestamps únicos")
                         # Fallback a interpolación lineal si pocos timestamps únicos
                         pos = self.linear_interpolation_fallback(
                             interpolated_positions, target_ms
@@ -704,20 +755,27 @@ class FutsalReplaySystem:
         self.player_number = self.ax.text(0, 0, '7', ha='center', va='center',
                                         fontsize=10, fontweight='bold', color='white', zorder=21)
         
-        # === TRAYECTORIA AVANZADA ===
-        self.trail_length = 150  # Más puntos para mejor visualización
-        
-        # Trayectoria principal con degradado
-        self.trail_line, = self.ax.plot([], [], '-', color='#FF6B35', alpha=0.8, linewidth=3,
-                                       label='Trayectoria', zorder=10)
-        
-        # Trayectoria secundaria (sombra)
-        self.trail_shadow, = self.ax.plot([], [], '-', color='black', alpha=0.3, linewidth=5,
-                                         zorder=9)
-        
-        # Puntos de trayectoria con tamaño variable
-        self.trail_dots, = self.ax.plot([], [], 'o', color='#FF8C42', alpha=0.4, markersize=4,
-                                       zorder=11)
+        # === TRAYECTORIA AVANZADA (optimizada según memoria) ===
+        if not self.skip_trail:
+            # Trayectoria principal con degradado
+            self.trail_line, = self.ax.plot([], [], '-', color='#FF6B35', alpha=0.8, linewidth=3,
+                                           label='Trayectoria', zorder=10)
+            
+            # Trayectoria secundaria (sombra)
+            self.trail_shadow, = self.ax.plot([], [], '-', color='black', alpha=0.3, linewidth=5,
+                                             zorder=9)
+            
+            # Puntos de trayectoria con tamaño variable
+            self.trail_dots, = self.ax.plot([], [], 'o', color='#FF8C42', alpha=0.4, markersize=4,
+                                           zorder=11)
+            print(" Trayectoria en tiempo real habilitada")
+        else:
+            # Modo optimización: solo línea básica con menos puntos
+            self.trail_line, = self.ax.plot([], [], '-', color='#FF6B35', alpha=0.6, linewidth=2,
+                                           label='Trayectoria (optimizada)', zorder=10)
+            self.trail_shadow = None
+            self.trail_dots = None
+            print(" Modo optimización memoria: trayectoria simplificada")
         
         # === INDICADORES DE VELOCIDAD ===
         # Círculo de velocidad (radio proporcional)
@@ -834,19 +892,28 @@ class FutsalReplaySystem:
         # Número del jugador (sigue al jugador)
         self.player_number.set_position((x, y))
         
-        # === ACTUALIZAR TRAYECTORIA ===
-        start_idx = max(0, frame_idx - self.trail_length)
-        trail_data = self.df.iloc[start_idx:frame_idx + 1]
-        
-        if len(trail_data) > 1:
-            # Trayectoria principal
-            self.trail_line.set_data(trail_data['x'], trail_data['y'])
+        # === ACTUALIZAR TRAYECTORIA (optimizada según memoria) ===
+        if not self.skip_trail:
+            start_idx = max(0, frame_idx - self.trail_length)
+            trail_data = self.df.iloc[start_idx:frame_idx + 1]
             
-            # Sombra de la trayectoria
-            self.trail_shadow.set_data(trail_data['x'], trail_data['y'])
-            
-            # Puntos de trayectoria con degradado
-            self.trail_dots.set_data(trail_data['x'], trail_data['y'])
+            if len(trail_data) > 1:
+                # Trayectoria principal
+                self.trail_line.set_data(trail_data['x'], trail_data['y'])
+                
+                # Sombra de la trayectoria (solo si no está optimizado)
+                if self.trail_shadow:
+                    self.trail_shadow.set_data(trail_data['x'], trail_data['y'])
+                
+                # Puntos de trayectoria con degradado (solo si no está optimizado)
+                if self.trail_dots:
+                    self.trail_dots.set_data(trail_data['x'], trail_data['y'])
+        else:
+            # Modo optimización: solo línea básica con menos puntos
+            start_idx = max(0, frame_idx - 20)  # Solo 20 puntos en modo optimizado
+            trail_data = self.df.iloc[start_idx:frame_idx + 1]
+            if len(trail_data) > 1:
+                self.trail_line.set_data(trail_data['x'], trail_data['y'])
         
         # === CALCULAR VELOCIDAD Y DIRECCIÓN ===
         speed = self.calculate_speed(frame_idx)
@@ -891,17 +958,17 @@ class FutsalReplaySystem:
         # === OPTIMIZACIÓN: Usar distancia acumulativa precalculada ===
         total_distance = self.df['cum_dist'].iloc[frame_idx] if frame_idx < len(self.df) else 0
         
-        # Clasificación de velocidad
+        # Clasificación de velocidad (iconos ASCII compatibles)
         if speed < 1.0:
-            speed_class = "🚶 CAMINANDO"
+            speed_class = "[WALK] CAMINANDO"
         elif speed < 3.0:
-            speed_class = " TROTE"
+            speed_class = "[JOG]  TROTE"
         elif speed < 5.0:
-            speed_class = "💨 CARRERA"
+            speed_class = "[RUN]  CARRERA"
         else:
-            speed_class = " SPRINT"
+            speed_class = "[SPRINT] SPRINT"
         
-        stats_text = (f"⏱️ {elapsed_time:.1f}s | 📍({x:.1f},{y:.1f}) | {speed_class} {speed:.1f}m/s | 📏{total_distance:.0f}m | {frame_idx + 1}/{self.total_frames} | {progress:.0f}% | ⚡{self.playback_speed:.1f}x")
+        stats_text = (f"TIME {elapsed_time:.1f}s | POS({x:.1f},{y:.1f}) | {speed_class} {speed:.1f}m/s | DIST{total_distance:.0f}m | {frame_idx + 1}/{self.total_frames} | {progress:.0f}% | SPD{self.playback_speed:.1f}x")
         
         self.stats_panel.set_text(stats_text)
         
@@ -913,9 +980,11 @@ class FutsalReplaySystem:
                          fontsize=12, fontweight='bold', color=title_color,
                          bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
         
-        return [self.player_dot, self.player_number, self.trail_line, self.trail_shadow, 
-                self.trail_dots, self.current_zone, self.stats_panel, 
-                self.speed_indicator]
+        return [element for element in [
+            self.player_dot, self.player_number, self.trail_line, 
+            self.trail_shadow, self.trail_dots, self.current_zone, 
+            self.stats_panel, self.speed_indicator
+        ] if element is not None]
     
     def animate(self, frame):
         """Función de animación principal con control de velocidad mejorado"""
@@ -1258,6 +1327,8 @@ Ejemplos de uso:
   python movement_replay.py                                    # Selección interactiva
   python movement_replay.py data/mi_partido.csv               # Archivo específico
   python movement_replay.py --report data/mi_partido.csv      # Solo mostrar reporte
+  python movement_replay.py --optimize-memory large_data.csv  # Optimización memoria
+  python movement_replay.py --skip-trail --optimize-memory huge_data.csv  # Máxima optimización
         """
     )
     
@@ -1265,6 +1336,10 @@ Ejemplos de uso:
                        help='Archivo CSV con datos de movimiento (opcional - si no se especifica, selección interactiva)')
     parser.add_argument('--report', action='store_true',
                        help='Mostrar solo reporte de análisis sin replay')
+    parser.add_argument('--optimize-memory', action='store_true',
+                       help='Optimizar memoria para datasets grandes (>1M filas)')
+    parser.add_argument('--skip-trail', action='store_true',
+                       help='Omitir trayectoria en tiempo real para reducir memoria')
     
     args = parser.parse_args()
     
@@ -1290,7 +1365,7 @@ Ejemplos de uso:
             generate_movement_report(selected_file)
             
             # Iniciar sistema de replay
-            replay_system = FutsalReplaySystem(selected_file)
+            replay_system = FutsalReplaySystem(selected_file, args.optimize_memory, args.skip_trail)
             replay_system.start_replay()
             
     except KeyboardInterrupt:
