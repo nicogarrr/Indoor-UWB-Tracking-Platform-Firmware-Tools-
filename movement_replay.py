@@ -171,6 +171,8 @@ class TrajectoryPredictor:
             )
             
             with warnings.catch_warnings():
+                # Silenciar ConvergenceWarning de GPR cuando hay pocos datos únicos
+                # Nota: puede causar overhead en hardware lento con muestras próximas
                 warnings.simplefilter("ignore")
                 self.x_model.fit(norm_timestamps, valid_positions[:, 0])
                 self.y_model.fit(norm_timestamps, valid_positions[:, 1])
@@ -379,9 +381,19 @@ class FutsalReplaySystem:
                 if (self.use_ml_prediction and 
                     len(interpolated_positions) >= 10):
                     
-                    # Entrenar con datos recientes
+                    # Entrenar con datos recientes (verificar timestamps distintos)
                     recent_positions = np.array(interpolated_positions[-10:])
                     recent_timestamps = full_timeline[len(interpolated_positions)-10:len(interpolated_positions)]
+                    
+                    # Verificar que hay al menos 5 timestamps distintos para GPR
+                    unique_timestamps = len(np.unique(recent_timestamps))
+                    if unique_timestamps < 5:
+                        # Fallback a interpolación lineal si pocos timestamps únicos
+                        pos = self.linear_interpolation_fallback(
+                            interpolated_positions, target_ms
+                        )
+                        interpolated_positions.append(pos)
+                        continue
                     
                     if self.trajectory_predictor.train(recent_timestamps, recent_positions):
                         predictions = self.trajectory_predictor.predict([target_ms], self.max_player_speed)
@@ -451,8 +463,8 @@ class FutsalReplaySystem:
             dx = last_pos[0] - prev_pos[0]
             dy = last_pos[1] - prev_pos[1]
             
-            # Limitar extrapolación vinculada a la frecuencia de muestreo
-            max_extrapolation = 0.5 * (self.animation_step_ms / 20)  # metros
+            # Limitar extrapolación vinculada a la frecuencia de muestreo  
+            max_extrapolation = 0.5 * (self.animation_step_ms / 20)
             distance = np.sqrt(dx*dx + dy*dy)
             if distance > max_extrapolation:
                 scale = max_extrapolation / distance
@@ -911,9 +923,9 @@ class FutsalReplaySystem:
             # Siempre avanzar 1 frame, la velocidad se controla por el intervalo
             self.current_frame = min(self.current_frame + 1, self.total_frames - 1)
             
-            # Actualizar intervalo de animación según velocidad
+            # Actualizar intervalo de animación según velocidad (limitado a 60 FPS para hardware lento)
             if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
-                new_interval = max(5, int(40 / self.playback_speed))  # 40ms base / velocidad
+                new_interval = max(17, int(40 / self.playback_speed))  # 40ms base / velocidad, límite 60 FPS
                 self.anim.event_source.interval = new_interval
             
             # Pausar automáticamente al final
@@ -939,20 +951,20 @@ class FutsalReplaySystem:
         elif event.key == 'up':  # Flecha arriba - Aumentar velocidad
             self.playback_speed = min(self.max_playback_speed, self.playback_speed + 0.5)
             print(f" Velocidad: {self.playback_speed:.1f}x")
+            # Actualizar intervalo de animación instantáneamente (limitado a 60 FPS para hardware lento)
+            if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
+                self.anim.event_source.interval = max(17, int(40 / self.playback_speed))
             # Sincronizar slider evitando callback recursivo
-            if hasattr(self, 'speed_slider'):
-                self.speed_slider.eventson = False
-                self.speed_slider.set_val(self.playback_speed)
-                self.speed_slider.eventson = True
+            self._sync_slider_safely(self.playback_speed)
             
         elif event.key == 'down':  # Flecha abajo - Reducir velocidad
             self.playback_speed = max(self.min_speed, self.playback_speed - 0.5)
             print(f" Velocidad: {self.playback_speed:.1f}x")
+            # Actualizar intervalo de animación instantáneamente (limitado a 60 FPS para hardware lento)
+            if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
+                self.anim.event_source.interval = max(17, int(40 / self.playback_speed))
             # Sincronizar slider evitando callback recursivo
-            if hasattr(self, 'speed_slider'):
-                self.speed_slider.eventson = False
-                self.speed_slider.set_val(self.playback_speed)
-                self.speed_slider.eventson = True
+            self._sync_slider_safely(self.playback_speed)
             
         elif event.key == 'r':  # R - Reiniciar
             self.current_frame = 0
@@ -1023,6 +1035,15 @@ class FutsalReplaySystem:
         # Actualizar colores de botones según estado
         self.update_button_colors()
     
+    def _sync_slider_safely(self, new_value):
+        """Sincronizar slider evitando callbacks recursivos"""
+        if hasattr(self, 'speed_slider'):
+            # Método compatible con todas las versiones de matplotlib
+            original_eventson = self.speed_slider.eventson
+            self.speed_slider.eventson = False
+            self.speed_slider.set_val(new_value)
+            self.speed_slider.eventson = original_eventson
+    
     def update_speed(self, val):
         """
         Actualizar velocidad de reproducción con límites seguros.
@@ -1031,6 +1052,10 @@ class FutsalReplaySystem:
             val: Valor del slider (0.1 a 10.0)
         """
         self.playback_speed = np.clip(val, 0.1, self.max_playback_speed)
+        
+        # Actualizar intervalo de animación instantáneamente (limitado a 60 FPS para hardware lento)
+        if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
+            self.anim.event_source.interval = max(17, int(40 / self.playback_speed))
     
     def toggle_kalman(self, event):
         """Activar/desactivar filtro de Kalman"""
@@ -1056,9 +1081,9 @@ class FutsalReplaySystem:
         kalman_color = 'lightgreen' if self.use_kalman_filter else 'lightcoral'
         ml_color = 'lightblue' if self.use_ml_prediction else 'lightcoral'
         
-        # Colores de texto (mejor contraste)
+        # Colores de texto (mejor contraste para legibilidad)
         kalman_text_color = 'darkgreen' if self.use_kalman_filter else 'darkred'
-        ml_text_color = 'darkblue' if self.use_ml_prediction else 'darkred'
+        ml_text_color = '#002b5c' if self.use_ml_prediction else 'darkred'  # Azul más oscuro
         
         # Actualizar fondo de botones
         self.kalman_button.ax.set_facecolor(kalman_color)
@@ -1079,6 +1104,12 @@ def generate_movement_report(csv_file):
     # Calcular estadísticas
     total_time = (df['timestamp'].iloc[-1] - df['timestamp'].iloc[0]).total_seconds()
     
+    # Validación temprana: evitar división por cero
+    if total_time <= 0:
+        print("\n⚠️  ADVERTENCIA: Duración de datos insuficiente para análisis")
+        print("   Los timestamps no tienen rango temporal válido")
+        return
+    
     # === OPTIMIZACIÓN: Cálculo eficiente de distancias ===
     # Usar numpy hypot para mejor rendimiento
     x_diff = df['x'].diff()
@@ -1087,10 +1118,10 @@ def generate_movement_report(csv_file):
     step_distances[0] = 0  # Primera distancia es 0
     
     total_distance = step_distances.sum()
-    avg_speed = total_distance / total_time if total_time > 0 else 0
+    avg_speed = total_distance / total_time  # Ya validamos total_time > 0
     
-    # Calcular frecuencia real en lugar de asumir 25 Hz
-    freq = len(df) / total_time if total_time > 0 else 25
+    # Calcular frecuencia real (ya validamos total_time > 0)
+    freq = len(df) / total_time
     max_speed = step_distances.max() * freq if len(step_distances) > 0 else 0
     
     print(f"\n REPORTE DE ANÁLISIS DE MOVIMIENTO")
