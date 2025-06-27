@@ -34,18 +34,18 @@
 #define TAG_ID 1 // 
 
 // ===== CONFIGURACIÓN WiFi =====
-#define USE_AP_MODE false
+#define USE_AP_MODE false  // Conectar a WiFi casa para MQTT
 #define AP_SSID "UWB_TAG_AP"
 #define AP_PASS "12345678"
-#define STA_SSID "iPhone de Nicolas"
-#define STA_PASS "12345678"
+#define STA_SSID "MOVISTAR_PLUS_40B0"  // WiFi de casa (corregido)
+#define STA_PASS "7pB7LRsfo9Dyf7MWhoRX"  // Contraseña WiFi casa
 
 // Configuraciones del servidor web
 #define HTTP_PORT 80
 WebServer server(HTTP_PORT);
 
 // MQTT Configuration
-const char* mqtt_server = "172.20.10.3"; // Broker IP (Your PC)
+const char* mqtt_server = "192.168.1.38"; // Broker IP (Your PC) - Updated for WiFi connection
 const int mqtt_port = 1883;
 const char* log_topic = "uwb/indoor/logs";   // Topic for detailed CSV logs (indoor)
 char status_topic[30];                      // Topic for simple status (constructed in setup)
@@ -786,7 +786,7 @@ void setupWiFi() {
       DEBUG_PRINT("Configuring WiFi mode AP...");
   WiFi.mode(WIFI_AP);
   WiFi.softAP(AP_SSID, AP_PASS);
-  esp_task_wdt_reset(); // TFG v2.1-FINAL: Reset WDT también en modo AP
+  // esp_task_wdt_reset(); // TFG v2.1-FINAL: Comentado - WDT no configurado aún
   Serial.print("AP created. IP: ");
   Serial.println(WiFi.softAPIP());
   } else {
@@ -801,12 +801,12 @@ void setupWiFi() {
     unsigned long startAttemptTime = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 15000) { // 15-second timeout
       DEBUG_PRINT("."); // Print dots while waiting
-      esp_task_wdt_reset(); // TFG v2.1-PRODUCTION: Evitar reset WDT durante conexión
+      // esp_task_wdt_reset(); // TFG v2.1-PRODUCTION: Comentado - WDT no configurado aún
       delay(500);
     }
     
     /* NUEVO – por si falla y sales sin conectar */
-    esp_task_wdt_reset();
+    // esp_task_wdt_reset(); // Comentado - WDT no configurado aún
     DEBUG_PRINTLN(); // Newline after dots
 
     if (WiFi.status() == WL_CONNECTED) {
@@ -1099,7 +1099,7 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
 
 void reconnectMQTT() {
   if (!client.connected()) {
-    esp_task_wdt_reset(); // TFG v2.1-PRODUCTION: Reset WDT durante reconexión MQTT
+    // esp_task_wdt_reset(); // TFG v2.1-PRODUCTION: Comentado - se hace en loop principal
     long now = millis();
     if (now - lastMqttReconnectAttempt > 5000) {
       lastMqttReconnectAttempt = now;
@@ -1235,15 +1235,15 @@ void setup() {
   
   setupWebServer();
   
-  // MEJORA TFG: Configurar watchdog para robustez del sistema (API actualizada ESP32)
-  esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = 7000,    // 7 segundos para WiFi lag + lowPowerMode
-    .idle_core_mask = 0,   // No monitorear idle tasks
-    .trigger_panic = true  // Hacer panic si timeout
-  };
-  esp_task_wdt_init(&wdt_config); // TFG v2.1-FINAL: API actualizada
-  esp_task_wdt_add(NULL);         // Añadir tarea actual al watchdog
-              DEBUG_PRINTLN("Watchdog configurado: 7s timeout");
+  // MEJORA TFG: Configurar watchdog para robustez del sistema (TEMPORALMENTE DESHABILITADO)
+  // esp_task_wdt_config_t wdt_config = {
+  //   .timeout_ms = 7000,    // 7 segundos para WiFi lag + lowPowerMode
+  //   .idle_core_mask = 0,   // No monitorear idle tasks
+  //   .trigger_panic = true  // Hacer panic si timeout
+  // };
+  // esp_task_wdt_init(&wdt_config); // TFG v2.1-FINAL: API actualizada
+  // esp_task_wdt_add(NULL);         // Añadir tarea actual al watchdog
+  Serial.println("Watchdog DESHABILITADO para debugging");
   
   // Setup MQTT
   client.setServer(mqtt_server, mqtt_port);
@@ -1358,11 +1358,11 @@ void loop() {
           fin_de_com = 0;
           
           while (fin_de_com == 0) {
-            esp_task_wdt_reset(); // MEJORA TFG: Reset watchdog durante ranging intensivo
+            // esp_task_wdt_reset(); // MEJORA TFG: Reset watchdog durante ranging intensivo (DESHABILITADO)
             
             // TFG v2.1-FINAL: Reset adicional cuando no esperamos respuesta
             if (!waitingForResponse) {
-              esp_task_wdt_reset();
+              // esp_task_wdt_reset(); // DESHABILITADO
             }
             
             if (waitingForResponse && ((millis() - timeoutStart) >= RESPONSE_TIMEOUT)) {
@@ -1699,8 +1699,8 @@ void loop() {
   executePendingReset();
   processPendingMqttPublish();
   
-  // MEJORA TFG v2.1: Reset watchdog también fuera del slot para TAG_ID altos
-  esp_task_wdt_reset();
+  // MEJORA TFG v2.1: Reset watchdog también fuera del slot para TAG_ID altos (DESHABILITADO)
+  // esp_task_wdt_reset();
   
   // MEJORA TFG: Reportar métricas de rendimiento periódicamente
   reportPerformanceMetrics();

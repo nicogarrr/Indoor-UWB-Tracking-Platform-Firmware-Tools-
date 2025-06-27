@@ -1,7 +1,7 @@
 #include "DW3000.h"
 #include <esp_task_wdt.h> // MEJORA TFG: Watchdog para robustez
 // ID_PONG = 10 (valor por defecto en config.h)
-#include "../../common/config.h" // TFG v2.1: Configuración centralizada
+#include "../../common/config_indoor.h" // TFG v2.1: Configuración centralizada
 
 // MEJORA 10: Librerías para métricas por red
 #if ENABLE_MQTT_METRICS

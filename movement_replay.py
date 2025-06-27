@@ -1059,13 +1059,19 @@ class FutsalReplaySystem:
     def animate(self, frame):
         """Función de animación principal con control de velocidad mejorado"""
         if self.is_playing:
-            # Siempre avanzar 1 frame, la velocidad se controla por el intervalo
-            self.current_frame = min(self.current_frame + 1, self.total_frames - 1)
-            
-            # Actualizar intervalo de animación según velocidad (limitado a 60 FPS para hardware lento)
-            if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
-                new_interval = max(17, int(40 / self.playback_speed))  # 40ms base / velocidad, límite 60 FPS
-                self.anim.event_source.interval = new_interval
+            # --- NUEVO CONTROL DE VELOCIDAD ---
+            if self.playback_speed >= 1.0:
+                frames_to_advance = int(round(self.playback_speed))
+                self.current_frame = min(self.current_frame + frames_to_advance, self.total_frames - 1)
+                # Mantener un intervalo constante (40 ms ≈ 25 FPS)
+                if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
+                    self.anim.event_source.interval = 40
+            else:
+                # Velocidad más lenta: avanzar 1 frame pero alargar intervalo
+                self.current_frame = min(self.current_frame + 1, self.total_frames - 1)
+                if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
+                    slow_interval = int(40 / self.playback_speed)  # Ej.: 0.5x → 80 ms
+                    self.anim.event_source.interval = slow_interval
             
             # Pausar automáticamente al final
             if self.current_frame >= self.total_frames - 1:

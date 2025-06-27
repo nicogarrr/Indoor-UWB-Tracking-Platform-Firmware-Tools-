@@ -10,6 +10,7 @@ y los almacena en archivos CSV para análisis posterior.
 """
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.enums import CallbackAPIVersion
 import csv
 import json
 import time
@@ -50,8 +51,8 @@ class MQTTToCSVCollector:
         # Lock para escritura thread-safe
         self.file_lock = Lock()
         
-        # Cliente MQTT
-        self.client = mqtt.Client(client_id="uwb_data_collector")
+        # Cliente MQTT (API v2 para evitar deprecation warning)
+        self.client = mqtt.Client(CallbackAPIVersion.VERSION2, client_id="uwb_data_collector")
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect
@@ -111,19 +112,21 @@ class MQTTToCSVCollector:
                 'session_id'
             ])
     
-    def on_connect(self, client, userdata, flags, rc):
+    def on_connect(self, client, userdata, flags, rc, properties=None):
         """Callback de conexión MQTT"""
         if rc == 0:
             print(f"✅ Conectado al broker MQTT (rc={rc})")
             
             # Suscribirse a todos los topics relevantes
             topics = [
-                "uwb/tag/logs",           # Datos de ranging brutos
-                "uwb/tag/+/status",       # Estado de tags
+                "uwb/tag/logs",           # Datos de ranging brutos (tag.ino)
+                "uwb/tag/+/status",       # Estado de tags (tag.ino con posición)
+                "uwb/indoor/logs",        # Datos indoor (tag_indoor.ino)
                 "uwb/futsal/zones",       # Eventos de zonas
                 "uwb/futsal/performance", # Eventos de rendimiento
                 "uwb/futsal/metrics",     # Métricas del sistema
                 "uwb/anchor/+/metrics",   # Métricas de anclas
+                "uwb/+/+/status",         # Todos los status de tags
             ]
             
             for topic in topics:
@@ -133,7 +136,7 @@ class MQTTToCSVCollector:
         else:
             print(f"❌ Error de conexión MQTT (rc={rc})")
     
-    def on_disconnect(self, client, userdata, rc):
+    def on_disconnect(self, client, userdata, rc, properties=None):
         """Callback de desconexión MQTT"""
         print(f"🔌 Desconectado del broker MQTT (rc={rc})")
     
@@ -148,7 +151,7 @@ class MQTTToCSVCollector:
             session_id = datetime.datetime.fromtimestamp(self.start_time).strftime("%Y%m%d_%H%M%S")
             
             # Procesar según el topic
-            if topic == "uwb/tag/logs":
+            if topic == "uwb/tag/logs" or topic == "uwb/indoor/logs":
                 self.process_ranging_data(payload, timestamp_system, session_id)
             
             elif topic.startswith("uwb/tag/") and topic.endswith("/status"):
@@ -351,9 +354,51 @@ class MQTTToCSVCollector:
         else:
             print(f"\n⚠️  Sin datos de posición aún...")
     
+    def detect_mqtt_broker(self):
+        """Detectar broker MQTT disponible en diferentes redes"""
+        brokers_to_try = [
+            ("172.20.10.2", "iPhone hotspot (IP real)"),
+            ("172.20.10.3", "iPhone hotspot (IP anterior)"),
+            ("192.168.1.38", "WiFi casa MOVISTAR"),
+            ("localhost", "Local"),
+            ("127.0.0.1", "Local IP")
+        ]
+        
+        for broker_ip, network_name in brokers_to_try:
+            try:
+                print(f"🔍 Probando broker {broker_ip} ({network_name})...")
+                test_client = mqtt.Client(CallbackAPIVersion.VERSION2, client_id="uwb_test_connection")
+                test_client.connect(broker_ip, self.mqtt_port, 5)  # 5 sec timeout
+                test_client.loop_start()
+                time.sleep(1)  # Breve pausa para verificar conexión
+                test_client.disconnect()
+                test_client.loop_stop()
+                
+                print(f"✅ Broker encontrado: {broker_ip} ({network_name})")
+                return broker_ip
+                
+            except Exception as e:
+                print(f"❌ {broker_ip} no disponible: {str(e)[:50]}")
+                continue
+        
+        return None
+
     def run(self):
         """Ejecutar el recolector"""
         try:
+            # Detectar broker MQTT disponible
+            detected_broker = self.detect_mqtt_broker()
+            if detected_broker:
+                self.mqtt_server = detected_broker
+                print(f"🎯 Usando broker MQTT: {self.mqtt_server}:{self.mqtt_port}")
+            else:
+                print("❌ No se encontró ningún broker MQTT disponible.")
+                print("💡 Opciones para solucionar:")
+                print("   1. Activar hotspot iPhone 'iPhone de Nicolas'")
+                print("   2. Conectar a WiFi casa 'MOVISTAR_PLUS_40B0'")
+                print("   3. Iniciar broker local: mosquitto -v -p 1883")
+                return
+            
             # Conectar al broker MQTT
             self.client.connect(self.mqtt_server, self.mqtt_port, 60)
             

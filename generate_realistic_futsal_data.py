@@ -7,6 +7,7 @@ Simula comportamientos naturales de un jugador profesional
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from datetime import datetime, timedelta
 import os
 import argparse
@@ -19,10 +20,10 @@ class FutsalPlayerSimulator:
         self.field_width = field_width
         self.field_height = field_height
         
-        # Parámetros de movimiento realista
-        self.base_speed = 1.5  # m/s - velocidad de trote normal
-        self.max_speed = 6.5   # m/s - sprint máximo
-        self.acceleration = 3.0  # m/s² - aceleración realista
+        # Parámetros de movimiento realista (ajustados a métricas de élite)
+        self.base_speed = 1.6      # m/s  velocidad media reportada
+        self.max_speed = 6.2       # m/s  pico de sprint típico
+        self.acceleration = 6.0    # m/s² aceleraciones muy explosivas
         
         # Estados del jugador
         self.movement_states = {
@@ -39,6 +40,13 @@ class FutsalPlayerSimulator:
             'offensive': {'x_range': (27, 40), 'y_range': (0, 20)},
             'penalty_area_own': {'x_range': (0, 6), 'y_range': (7, 13)},
             'penalty_area_opp': {'x_range': (34, 40), 'y_range': (7, 13)}
+        }
+        
+        # Pesos de estados de movimiento dependientes del rol
+        self.role_state_weights = {
+            'defender':  {'walking': 0.35, 'jogging': 0.45, 'running': 0.15, 'sprinting': 0.05},
+            'midfielder':{'walking': 0.30, 'jogging': 0.40, 'running': 0.20, 'sprinting': 0.10},
+            'attacker':  {'walking': 0.10, 'jogging': 0.30, 'running': 0.35, 'sprinting': 0.25},
         }
         
     def get_zone_center(self, zone_name):
@@ -98,6 +106,14 @@ class FutsalPlayerSimulator:
         
         distance_to_ball = np.sqrt((px - bx)**2 + (py - by)**2)
         
+        # Ataques aleatorios: 15 % de frames el pívot hace un sprint a un punto aleatorio ofensivo
+        if role == 'attacker' and np.random.rand() < 0.15:
+            target_x = np.random.uniform(27, 39)
+            target_y = np.random.uniform(2, 18)
+            target_x = np.clip(target_x, 1, 39)
+            target_y = np.clip(target_y, 1, 19)
+            return (target_x, target_y), 0.9
+        
         # Diferentes comportamientos según la distancia al balón
         if distance_to_ball < 3:  # Muy cerca del balón
             # Movimiento directo hacia el balón
@@ -115,11 +131,17 @@ class FutsalPlayerSimulator:
                 target_x = min(bx - 2, px + 1)
                 target_y = by + np.random.normal(0, 1)
             else:  # attacker
-                # Buscar espacio ofensivo
-                target_x = bx + 3 + np.random.normal(0, 1)
-                target_y = by + np.random.normal(0, 2)
-            urgency = 0.6
-            
+                # 50 % de probabilidad de sprint ofensivo largo
+                if np.random.rand() < 0.5:
+                    target_x = np.random.uniform(5, 39)
+                    target_y = np.random.uniform(2, 18)
+                    urgency = 0.8
+                else:
+                    # Buscar espacio ofensivo cercano
+                    target_x = bx + 3 + np.random.normal(0, 1)
+                    target_y = by + np.random.normal(0, 2)
+                    urgency = 0.6
+        
         else:  # Lejos del balón
             # Movimiento posicional según rol
             if role == "midfielder":
@@ -139,9 +161,20 @@ class FutsalPlayerSimulator:
         target_x = np.clip(target_x, 1, 39)
         target_y = np.clip(target_y, 1, 19)
         
+        # Sesgo posicional adicional basado en estudios de calor
+        if role == 'defender' and np.random.rand() < 0.7 and px > 20:
+            # Cierre vuelve a zona defensiva
+            target_x, target_y = self.get_zone_center('defensive')
+            urgency = 0.4
+        elif role == 'attacker' and np.random.rand() < 0.6 and px < 26:
+            # Pívot busca desmarque ofensivo
+            target_x = np.random.uniform(27, 39)
+            target_y = np.random.uniform(4, 16)
+            urgency = 0.7
+        
         return (target_x, target_y), urgency
     
-    def smooth_movement(self, current_pos, target_pos, current_velocity, dt, urgency=0.5):
+    def smooth_movement(self, current_pos, target_pos, current_velocity, dt, urgency=0.5, target_speed=None):
         """Movimiento suave y realista hacia un objetivo"""
         cx, cy = current_pos
         tx, ty = target_pos
@@ -155,8 +188,12 @@ class FutsalPlayerSimulator:
         if distance < 0.1:  # Ya está en el objetivo
             return current_pos, (current_velocity[0] * 0.9, current_velocity[1] * 0.9)  # Desacelerar
         
-        # Velocidad deseada según urgencia y distancia
-        desired_speed = self.base_speed * (1 + urgency)
+        # Velocidad deseada según urgencia, distancia y posible estado seleccionado
+        if target_speed is not None:
+            desired_speed = target_speed
+        else:
+            desired_speed = self.base_speed * (1 + urgency)
+        
         if distance > 5:
             desired_speed *= 1.5  # Acelerar si está lejos
         
@@ -189,6 +226,13 @@ class FutsalPlayerSimulator:
         noise_factor = 0.1
         new_vx += np.random.normal(0, noise_factor)
         new_vy += np.random.normal(0, noise_factor)
+        
+        # Asegurar que la velocidad no supere el máximo permitido
+        speed_mag = np.sqrt(new_vx**2 + new_vy**2)
+        if speed_mag > self.max_speed:
+            scale = self.max_speed / speed_mag
+            new_vx *= scale
+            new_vy *= scale
         
         # Nueva posición
         new_x = cx + new_vx * dt
@@ -243,20 +287,44 @@ class FutsalPlayerSimulator:
         
         print("   🚀 Simulando movimiento...")
         
+        # Mapear roles en español a roles internos
+        role_alias = {
+            'cierre': 'defender',
+            'pivot': 'attacker',
+            'ala': 'midfielder',
+            'ala_izquierda': 'midfielder',
+            'ala_derecha': 'midfielder'
+        }
+
+        if player_role in role_alias:
+            player_role_internal = role_alias[player_role]
+        else:
+            player_role_internal = player_role  # asumir inglés
+        
+        # Duración de objetivo en frames
+        target_refresh_frames = int(fps * 0.5)  # actualizar cada 0.5 s aprox.
+        current_target_pos, current_urgency = (player_x, player_y), 0.0
+
         for frame in range(total_frames):
             current_time = start_time + timedelta(seconds=frame * dt)
-            
+
             # Posición actual del balón
             ball_x, ball_y = ball_positions[frame]
-            
-            # Calcular respuesta del jugador al balón
-            target_pos, urgency = self.calculate_player_response_to_ball(
-                (player_x, player_y), (ball_x, ball_y), player_role
-            )
-            
+
+            # Actualizar objetivo solo cuando toca refresco
+            if frame % target_refresh_frames == 0:
+                # Seleccionar estado de movimiento según el rol para este frame
+                weights = self.role_state_weights.get(player_role_internal, self.role_state_weights['midfielder'])
+                state = np.random.choice(list(self.movement_states), p=list(weights.values()))
+                target_speed_sample = np.random.uniform(*self.movement_states[state]['speed_range'])
+                # Calcular respuesta del jugador al balón
+                current_target_pos, current_urgency = self.calculate_player_response_to_ball(
+                    (player_x, player_y), (ball_x, ball_y), player_role_internal
+                )
+
             # Movimiento suave hacia el objetivo
             (player_x, player_y), (player_vx, player_vy) = self.smooth_movement(
-                (player_x, player_y), target_pos, (player_vx, player_vy), dt, urgency
+                (player_x, player_y), current_target_pos, (player_vx, player_vy), dt, current_urgency, target_speed_sample
             )
             
             # Calcular métricas
@@ -301,6 +369,21 @@ class FutsalPlayerSimulator:
         total_distance = sum(distances)
         avg_speed = np.mean(velocities)
         max_speed = max(velocities)
+        
+        # Validación automática adaptada a la duración de la sesión
+        lower_bound = 1800 * (duration_minutes / 20)
+        upper_bound = 2300 * (duration_minutes / 20)
+
+        # Tolerancia del 5 %
+        lower_bound *= 0.95
+        upper_bound *= 1.05
+
+        # DEBUG: imprimir para diagnóstico
+        print(f"   🔍 Distancia total simulada: {total_distance:.1f} m (esperada {lower_bound:.1f}-{upper_bound:.1f})")
+        print(f"   🔍 Velocidad máxima simulada: {max_speed:.2f} m/s")
+
+        assert lower_bound <= total_distance <= upper_bound, "Distancia total fuera de rango realista"
+        assert max_speed <= 6.5, "Velocidad máxima irreal (> 6.5 m/s)"
         
         print(f"\n✅ Sesión generada exitosamente:")
         print(f"   📊 Total frames: {len(df):,}")
@@ -382,30 +465,30 @@ class FutsalPlayerSimulator:
     
     def draw_futsal_field(self):
         """Dibujar campo de fútbol sala básico"""
+        ax = plt.gca()
         # Campo principal
-        plt.gca().add_patch(plt.Rectangle((0, 0), 40, 20, fill=False, 
+        ax.add_patch(patches.Rectangle((0, 0), 40, 20, fill=False, 
                                         edgecolor='black', linewidth=2))
         
         # Línea central
-        plt.plot([20, 20], [0, 20], 'k-', linewidth=2)
+        ax.plot([20, 20], [0, 20], 'k-', linewidth=2)
         
         # Círculo central
-        circle = plt.Circle((20, 10), 3, fill=False, edgecolor='black', linewidth=2)
-        plt.gca().add_patch(circle)
+        ax.add_patch(patches.Circle((20, 10), 3, fill=False, edgecolor='black', linewidth=2))
         
         # Áreas de portería
-        plt.gca().add_patch(plt.Rectangle((0, 7), 6, 6, fill=False, 
+        ax.add_patch(patches.Rectangle((0, 7), 6, 6, fill=False, 
                                         edgecolor='black', linewidth=2))
-        plt.gca().add_patch(plt.Rectangle((34, 7), 6, 6, fill=False, 
+        ax.add_patch(patches.Rectangle((34, 7), 6, 6, fill=False, 
                                         edgecolor='black', linewidth=2))
         
         # Porterías
-        plt.plot([0, 0], [8.5, 11.5], 'k-', linewidth=4)
-        plt.plot([40, 40], [8.5, 11.5], 'k-', linewidth=4)
+        ax.plot([0, 0], [8.5, 11.5], 'k-', linewidth=4)
+        ax.plot([40, 40], [8.5, 11.5], 'k-', linewidth=4)
         
-        plt.xlim(-1, 41)
-        plt.ylim(-1, 21)
-        plt.gca().set_aspect('equal')
+        ax.set_xlim(-1, 41)
+        ax.set_ylim(-1, 21)
+        ax.set_aspect('equal')
 
 def main():
     """Función principal"""
@@ -429,12 +512,20 @@ Ejemplos de uso:
                        help='Rol del jugador (default: midfielder)')
     parser.add_argument('--prefix', default='realistic_futsal',
                        help='Prefijo para nombres de archivo (default: realistic_futsal)')
+    parser.add_argument('--seed', type=int, default=None,
+                       help='Semilla para reproducibilidad (opcional)')
+    parser.add_argument('--no-plot', action='store_true',
+                       help='Ejecutar sin generar gráficos (útil para CI)')
     
     args = parser.parse_args()
     
     print("🏟️ GENERADOR DE DATOS REALISTAS DE FÚTBOL SALA")
     print("=" * 60)
     
+    # Semilla reproducible
+    if args.seed is not None:
+        np.random.seed(args.seed)
+
     # Crear simulador
     simulator = FutsalPlayerSimulator()
     
@@ -445,12 +536,20 @@ Ejemplos de uso:
         player_role=args.role
     )
     
-    # Guardar y visualizar
-    csv_file, plot_file = simulator.save_and_visualize(df, args.prefix)
+    # Guardar y/o visualizar según argumentos
+    if args.no_plot:
+        os.makedirs("data", exist_ok=True)
+        csv_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_file = f"data/{args.prefix}_{csv_timestamp}.csv"
+        df.to_csv(csv_file, index=False)
+        plot_file = None
+    else:
+        csv_file, plot_file = simulator.save_and_visualize(df, args.prefix)
     
     print(f"\n🎯 ARCHIVOS GENERADOS:")
-    print(f"   📄 CSV: {csv_file}")
-    print(f"   📊 Gráfico: {plot_file}")
+    print(f"   📄 CSV: {csv_file if csv_file else 'omitido (--no-plot)'}")
+    if plot_file:
+        print(f"   📊 Gráfico: {plot_file}")
     print(f"\n💡 SIGUIENTE PASO:")
     print(f"   python movement_replay.py {csv_file}")
     print("=" * 60)
