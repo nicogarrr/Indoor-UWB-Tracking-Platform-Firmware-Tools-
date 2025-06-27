@@ -1,0 +1,33 @@
+[run]
+# Configuración coverage para TFG Sistema UWB
+source = .
+omit = 
+    */venv/*
+    */env/*
+    */.pytest_cache/*
+    */test_*
+    setup.py
+    conftest.py
+
+[report]
+# Configuración reportes
+precision = 2
+show_missing = True
+skip_covered = False
+
+exclude_lines =
+    # Excluir líneas estándar
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    
+    # Excluir imports específicos
+    import matplotlib
+    plt.show
+    plt.close
+
+[html]
+directory = htmlcov
+title = Sistema UWB - Cobertura de Tests 

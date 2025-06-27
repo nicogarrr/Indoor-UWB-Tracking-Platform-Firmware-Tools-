@@ -274,21 +274,22 @@ class FutsalReplaySystem:
         self.verbose_debug = verbose_debug
         self.debug_log_counter = 0  # Contador para limitar spam de logs
         
-        # Ajustar parámetros según optimización de memoria
-        if optimize_memory:
+        # Ajustar parámetros según optimización de memoria y trail
+        if skip_trail:
+            self.trail_length = 20  # Máximo 20 puntos cuando no se muestra trail
+            print(f" Trail simplificado: {self.trail_length} puntos (skip_trail activado)")
+        elif optimize_memory:
             self.trail_length = 50  # Reducir trail para datasets grandes
             print(" Modo optimización de memoria activado (trail reducido)")
         else:
-            self.trail_length = 100
-        
-        # === COHERENCIA: Reducir trail_length si skip_trail está activado ===
-        if skip_trail:
-            self.trail_length = min(self.trail_length, 20)  # Máximo 20 puntos en modo skip_trail
-            print(f" Trail simplificado: {self.trail_length} puntos (skip_trail activado)")
+            self.trail_length = 100  # Trail completo por defecto
         
         self.animation_step_ms = 20  # 50 FPS
         self.max_player_speed = 7.0  # m/s (velocidad sprint fútbol sala - límite físico)
         self.interpolation_threshold = 100  # ms
+        # Intervalo mínimo entre reentrenamientos GPR (para acelerar en datasets grandes)
+        self.gpr_train_interval_ms = 500  # solo reentrenar cada 0.5 s de datos faltantes
+        self._last_gpr_train_ms = -1  # Timestamp del último entrenamiento GPR
         
         # Filtros y predictores
         self.kalman_filter = None
@@ -297,7 +298,6 @@ class FutsalReplaySystem:
         # Datos procesados - Inicializar como None
         self.original_df = None
         self.df = None
-        self.interpolated_data = None
         
         self.load_data(csv_file)
         self.setup_plot()
@@ -349,10 +349,10 @@ class FutsalReplaySystem:
             estimated_final_memory_mb = memory_usage_mb * interpolation_factor
             
             if num_rows > 500_000:  # >500k filas requieren advertencia
-                print(f"⚠️  Memoria estimada final: ~{estimated_final_memory_mb:.0f} MB ({estimated_final_memory_mb/1024:.1f} GB)")
+                print(f"WARNING: Memoria estimada final: ~{estimated_final_memory_mb:.0f} MB ({estimated_final_memory_mb/1024:.1f} GB)")
                 
                 if estimated_final_memory_mb > 1024 and not self.optimize_memory:  # >1GB
-                    print("🔴 DATASET CRÍTICO: Memoria estimada >1GB. Recomendado --optimize-memory")
+                    print("DATASET CRITICO: Memoria estimada >1GB. Recomendado --optimize-memory")
                     print("   O usar --skip-trail para reducir aún más la memoria")
             
             self.original_df['timestamp'] = pd.to_datetime(self.original_df['timestamp'])
@@ -422,8 +422,10 @@ class FutsalReplaySystem:
             return None
             
         # Convertir timestamps a millisegundos para trabajar
-        timestamps_ms = [(ts - self.original_df['timestamp'].iloc[0]).total_seconds() * 1000 
-                         for ts in self.original_df['timestamp']]
+        timestamps_ms = np.array([
+            (ts - self.original_df['timestamp'].iloc[0]).total_seconds() * 1000
+            for ts in self.original_df['timestamp']
+        ], dtype=np.float64)
         
         # Crear timeline completo con step fijo (incluir último instante)
         start_ms = 0
@@ -437,8 +439,15 @@ class FutsalReplaySystem:
         interpolated_positions = []
         
         for target_ms in full_timeline:
-            # Encontrar datos válidos más cercanos
-            closest_idx = np.argmin(np.abs(np.array(timestamps_ms) - target_ms))
+            # Encontrar dato más cercano usando búsqueda binaria (searchsorted)
+            idx = np.searchsorted(timestamps_ms, target_ms)
+            if idx >= len(timestamps_ms):
+                idx = len(timestamps_ms) - 1
+            # Evaluar vecino anterior para localizar el más cercano
+            if idx > 0 and abs(timestamps_ms[idx - 1] - target_ms) < abs(timestamps_ms[idx] - target_ms):
+                closest_idx = idx - 1
+            else:
+                closest_idx = idx
             
             if abs(timestamps_ms[closest_idx] - target_ms) <= self.interpolation_threshold:
                 # Usar dato real si está cerca
@@ -453,51 +462,40 @@ class FutsalReplaySystem:
                 
             else:
                 # Gap grande - usar predicción ML si está disponible
-                if (self.use_ml_prediction and 
-                    len(interpolated_positions) >= 10):
-                    
-                    # === OPTIMIZACIÓN: Usar índices directos en lugar de slice costoso ===
-                    # Entrenar con datos recientes (evitar slice en arrays grandes)
-                    recent_positions = np.array(interpolated_positions[-10:])
-                    
-                    # Calcular índices directos para evitar slice costoso de full_timeline
-                    current_idx = len(interpolated_positions)
-                    start_idx = current_idx - 10
-                    recent_timestamps = np.array([full_timeline[i] for i in range(start_idx, current_idx)])
-                    
-                    # Verificar que hay al least 5 timestamps distintos para GPR
-                    unique_timestamps = len(np.unique(recent_timestamps))
-                    if unique_timestamps < 5:
-                        # Limitar spam de logs: solo mostrar cada 50 intentos o si verbose_debug
-                        if self.verbose_debug or (self.debug_log_counter % 50 == 0):
-                            print(f"[DEBUG GPR] Entrenamiento omitido: solo {unique_timestamps}/5 timestamps únicos (intento {self.debug_log_counter + 1})")
-                        self.debug_log_counter += 1
-                        
-                        # Fallback a interpolación lineal si pocos timestamps únicos
-                        pos = self.linear_interpolation_fallback(
-                            interpolated_positions, target_ms
-                        )
-                        interpolated_positions.append(pos)
-                        continue
-                    
-                    if self.trajectory_predictor.train(recent_timestamps, recent_positions):
+                if (
+                    self.use_ml_prediction and
+                    len(interpolated_positions) >= 10
+                ):
+
+                    # Solo reentrenar GPR si ha pasado el intervalo mínimo
+                    should_train = (
+                        (self._last_gpr_train_ms < 0) or
+                        (target_ms - self._last_gpr_train_ms >= self.gpr_train_interval_ms) or
+                        (not self.trajectory_predictor.is_trained)
+                    )
+
+                    if should_train:
+                        # Entrenar con las 10 últimas muestras válidas
+                        recent_positions = np.array(interpolated_positions[-10:])
+                        recent_timestamps = np.array(full_timeline[len(interpolated_positions)-10 : len(interpolated_positions)])
+
+                        # Verificar que haya al menos 5 timestamps distintos
+                        unique_ts = len(np.unique(recent_timestamps))
+                        if unique_ts >= 5 and self.trajectory_predictor.train(recent_timestamps, recent_positions):
+                            self._last_gpr_train_ms = target_ms
+                        else:
+                            # Si no se pudo entrenar, caeremos en fallback lineal más abajo
+                            pass
+
+                    # Predecir si el modelo está entrenado
+                    if self.trajectory_predictor.is_trained:
                         predictions = self.trajectory_predictor.predict([target_ms], self.max_player_speed)
                         if predictions:
                             pos = predictions[0]
                         else:
-                            # Fallback a interpolación lineal
-                            pos = self.linear_interpolation_fallback(
-                                interpolated_positions, target_ms
-                            )
+                            pos = self.linear_interpolation_fallback(interpolated_positions, target_ms)
                     else:
-                        pos = self.linear_interpolation_fallback(
-                            interpolated_positions, target_ms
-                        )
-                else:
-                    # Interpolación lineal simple
-                    pos = self.linear_interpolation_fallback(
-                        interpolated_positions, target_ms
-                    )
+                        pos = self.linear_interpolation_fallback(interpolated_positions, target_ms)
                 
                 interpolated_positions.append(pos)
         
@@ -510,6 +508,15 @@ class FutsalReplaySystem:
             'tag_id': [self.original_df['tag_id'].iloc[0]] * len(full_timeline)
         })
         
+        # === OPTIMIZACIÓN MEMORIA: Mantener tipos eficientes ===
+        if self.optimize_memory:
+            # Convertir a tipos optimizados para ahorrar memoria
+            interpolated_df = interpolated_df.astype({
+                'x': 'float32',
+                'y': 'float32',
+                'tag_id': 'int32'
+            })
+        
         # === OPTIMIZACIÓN: Cálculo previo de distancias ===
         # Calcular distancias step by step usando numpy (más eficiente)
         x_diff = interpolated_df['x'].diff()
@@ -519,6 +526,13 @@ class FutsalReplaySystem:
         interpolated_df['step_dist'] = step_distances
         # Distancia acumulativa para acceso O(1) en update_frame
         interpolated_df['cum_dist'] = interpolated_df['step_dist'].cumsum()
+        
+        # === OPTIMIZACIÓN MEMORIA: Convertir distancias también ===
+        if self.optimize_memory:
+            interpolated_df = interpolated_df.astype({
+                'step_dist': 'float32',
+                'cum_dist': 'float32'
+            })
         
         return interpolated_df
     
@@ -591,7 +605,7 @@ class FutsalReplaySystem:
         
         # Panel de información
         self.setup_info_panel()
-    
+
     def draw_futsal_court_professional(self):
         """Dibujar cancha de fútbol sala profesional con todos los elementos reglamentarios"""
         
@@ -884,7 +898,7 @@ class FutsalReplaySystem:
             return "JUEGO"
     
     def calculate_speed(self, frame_idx):
-        """Calcular velocidad instantánea"""
+        """Calcular velocidad instantánea con límites realistas"""
         if self.df is None or frame_idx == 0:
             return 0.0
             
@@ -904,6 +918,28 @@ class FutsalReplaySystem:
             return 0.0
             
         speed = distance / dt  # m/s
+        
+        # === CORRECCIÓN: Limitar velocidades físicamente imposibles ===
+        # Velocidad máxima humana realista en fútbol sala: 8 m/s (incluye margen)
+        max_realistic_speed = 8.0
+        
+        if speed > max_realistic_speed:
+            # Advertencia solo para casos extremos (>2x límite)
+            if speed > max_realistic_speed * 2 and self.verbose_debug:
+                print(f"   [SPEED WARNING] Velocidad irreal detectada: {speed:.1f} m/s → limitada a {max_realistic_speed} m/s")
+            speed = max_realistic_speed
+        
+        # Suavizado simple con frame anterior para evitar picos
+        if hasattr(self, '_last_calculated_speed') and self._last_calculated_speed is not None:
+            # Evitar cambios bruscos >50% entre frames consecutivos
+            speed_change_ratio = abs(speed - self._last_calculated_speed) / max(self._last_calculated_speed, 0.1)
+            if speed_change_ratio > 0.5:
+                # Suavizar cambio brusco
+                speed = 0.7 * self._last_calculated_speed + 0.3 * speed
+        
+        # Almacenar para próximo frame
+        self._last_calculated_speed = speed
+        
         return speed
     
     def update_frame(self, frame_idx):
@@ -1008,7 +1044,7 @@ class FutsalReplaySystem:
         
         # === TÍTULO DINÁMICO ===
         title_color = 'lightgreen' if self.is_playing else 'orange'
-        status_icon = '▶️' if self.is_playing else '⏸️'
+        status_icon = 'PLAY' if self.is_playing else 'PAUSE'
         
         self.ax.set_title(f"{status_icon} {timestamp.strftime('%H:%M:%S.%f')[:-3]}",
                          fontsize=12, fontweight='bold', color=title_color,
@@ -1103,13 +1139,14 @@ class FutsalReplaySystem:
         )
         
         # Mostrar replay
-        plt.tight_layout()
+        # Ajuste de layout manual ya realizado con subplots_adjust para evitar solapamientos
+        plt.subplots_adjust(left=0.05, right=0.98, bottom=0.12, top=0.94)
         plt.show()
 
     def setup_interactive_controls(self):
         """Configurar controles interactivos avanzados con slider 0.1x-10x"""
         # Área para controles interactivos (espacio optimizado)
-        plt.subplots_adjust(bottom=0.12, top=0.94)
+        plt.subplots_adjust(left=0.05, right=0.98, bottom=0.12, top=0.94)
         
         # Slider para velocidad de reproducción (rango 0.1x a 10x)
         ax_speed = plt.axes((0.15, 0.05, 0.35, 0.025))
@@ -1166,17 +1203,55 @@ class FutsalReplaySystem:
         print(f" Filtro de Kalman: {'Activado' if self.use_kalman_filter else 'Desactivado'}")
         self.update_button_colors()
         
-        # Recargar datos con nuevo filtro
-        self.apply_advanced_filtering()
+        # === OPTIMIZACIÓN: Solo reprocessar Kalman si ya hay datos interpolados ===
+        if self.df is not None and len(self.df) > 0:
+            # Mantener datos base y solo reaplicar Kalman
+            self._reapply_kalman_filter()
+        else:
+            # Primer procesado o datos no válidos - recarga completa
+            self.apply_advanced_filtering()
+    
+    def _reapply_kalman_filter(self):
+        """Reaplicar solo el filtro de Kalman a datos ya interpolados"""
+        if self.df is None:
+            return
+            
+        print(" Reaplicando filtro de Kalman...")
+        
+        # Reinicializar filtro de Kalman si está activado
+        if self.use_kalman_filter:
+            first_valid_pos = self.find_first_valid_position()
+            if first_valid_pos is not None:
+                self.kalman_filter = KalmanPositionFilter(
+                    initial_pos=first_valid_pos,
+                    process_noise=0.01,
+                    measurement_noise=0.1
+                )
+                
+                # Reaplicar Kalman a las posiciones existentes
+                dt = self.animation_step_ms / 1000.0
+                for i in range(len(self.df)):
+                    pos = [self.df.iloc[i]['x'], self.df.iloc[i]['y']]
+                    filtered_pos = self.kalman_filter.process(pos, dt)
+                    self.df.iloc[i, self.df.columns.get_loc('x')] = filtered_pos[0]
+                    self.df.iloc[i, self.df.columns.get_loc('y')] = filtered_pos[1]
+        else:
+            # Si se desactiva Kalman, necesitamos datos originales - recarga completa
+            self.apply_advanced_filtering()
     
     def toggle_ml(self, event):
         """Activar/desactivar predicción ML"""
         self.use_ml_prediction = not self.use_ml_prediction
-        print(f"🤖 Predicción ML: {'Activada' if self.use_ml_prediction else 'Desactivada'}")
+        print(f"Prediccion ML: {'Activada' if self.use_ml_prediction else 'Desactivada'}")
         self.update_button_colors()
         
-        # Recargar datos con nueva configuración
-        self.apply_advanced_filtering()
+        # === OPTIMIZACIÓN: Solo recalcular si realmente es necesario ===
+        # ML solo afecta interpolación de gaps, no datos ya válidos
+        # Solo recarga si hay grandes cambios en la interpolación
+        print(" Configuración ML actualizada (efecto en próximos huecos de señal)")
+        
+        # Reset del timestamp de entrenamiento para forzar reentrenamiento
+        self._last_gpr_train_ms = -1
     
     def update_button_colors(self):
         """Actualizar colores de botones y texto según estado"""
@@ -1223,9 +1298,26 @@ def generate_movement_report(csv_file):
     total_distance = step_distances.sum()
     avg_speed = total_distance / total_time  # Ya validamos total_time > 0
     
-    # Calcular frecuencia real (ya validamos total_time > 0)
+    # === CORRECCIÓN: Calcular velocidades realistas ===
+    # Calcular frecuencia real y velocidades frame a frame
     freq = len(df) / total_time
-    max_speed = step_distances.max() * freq if len(step_distances) > 0 else 0
+    
+    # Velocidades frame a frame con límite realista
+    frame_speeds = step_distances * freq  # velocidad por frame
+    
+    # Aplicar límite físico realista
+    max_realistic_speed = 8.0  # m/s - límite humano fútbol sala
+    frame_speeds = np.clip(frame_speeds, 0, max_realistic_speed)
+    
+    max_speed = frame_speeds.max() if len(frame_speeds) > 0 else 0
+    
+    # === ADVERTENCIAS DE REALISMO ===
+    original_max_speed = (step_distances * freq).max() if len(step_distances) > 0 else 0
+    if original_max_speed > max_realistic_speed:
+        print(f"\n⚠️  VELOCIDADES CORREGIDAS:")
+        print(f"   Velocidad máxima original: {original_max_speed:.1f} m/s (irreal)")
+        print(f"   Velocidad máxima corregida: {max_speed:.1f} m/s (limitada)")
+        print(f"   Las velocidades >8 m/s se limitaron por realismo físico")
     
     print(f"\n REPORTE DE ANÁLISIS DE MOVIMIENTO")
     print("=" * 50)
@@ -1235,6 +1327,21 @@ def generate_movement_report(csv_file):
     print(f" Velocidad máxima: {max_speed:.2f} m/s")
     print(f" Total de frames: {len(df)}")
     print(f" Frecuencia de muestreo: ~{len(df)/total_time:.1f} Hz")
+    
+    # === ANÁLISIS DE REALISMO ===
+    if avg_speed > 4.0:
+        print(f"⚠️  ADVERTENCIA: Velocidad promedio muy alta ({avg_speed:.1f} m/s)")
+        print("   Velocidad típica fútbol sala: 1.5-3.0 m/s promedio")
+    elif avg_speed < 0.5:
+        print(f"ℹ️  INFO: Velocidad promedio baja ({avg_speed:.1f} m/s) - movimiento lento o estático")
+    else:
+        print(f"✅ Velocidad promedio realista ({avg_speed:.1f} m/s)")
+    
+    if max_speed > 7.0:
+        print(f"⚠️  ADVERTENCIA: Velocidad máxima muy alta ({max_speed:.1f} m/s)")
+    else:
+        print(f"✅ Velocidad máxima realista ({max_speed:.1f} m/s)")
+    
     print("=" * 50)
 
 def select_replay_file_interactive():
