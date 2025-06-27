@@ -58,20 +58,20 @@ static_assert(ID_PONG == 10 || ID_PONG == 20 || ID_PONG == 30 || ID_PONG == 40 |
 
 // ===== CONFIGURACIÓN CONSTEXPR PARA INDOOR =====
 namespace cfg_indoor {
-  // DIMENSIONES REALES SEGÚN PLANO DE TU CASA
-  constexpr float courtLength = 8.0f;     // 8 metros de largo (estimado del plano)
-  constexpr float courtWidth = 6.0f;      // 6 metros de ancho (estimado del plano)
-  constexpr float maxPlayerSpeed = 3.0f;  // Velocidad máxima en casa (caminar rápido)
+  // DIMENSIONES REALES EXACTAS DEL SALÓN
+  constexpr float courtLength = 3.45f;     // 3.45 metros de ancho (medida real corregida)
+  constexpr float courtWidth = 5.40f;      // 5.40 metros de largo (medida real corregida)
+  constexpr float maxPlayerSpeed = 2.5f;   // Velocidad máxima en salón (caminar/trotar)
   
-  // Umbrales de filtrado ajustados para indoor
-  constexpr float maxRangeThreshold = 15.0f; // Máximo 15m en casa
-  constexpr float minRangeThreshold = 0.3f;  // Mínimo 30cm
+  // Umbrales de filtrado ajustados para salón más pequeño
+  constexpr float maxRangeThreshold = 8.0f; // Máximo 8m (diagonal ~6.4m)
+  constexpr float minRangeThreshold = 0.15f; // Mínimo 15cm (más preciso)
   
-  // TDMA más rápido para indoor (menor latencia)
-  constexpr int tdmaCycleMs = 300;          // Ciclo más rápido
-  constexpr int tdmaSlotDurationMs = 60;    // Slots más cortos
-  constexpr int responseTimeout = 80;       // Timeout más corto
-  constexpr int roundDelay = 30;            // Delay reducido
+  // TDMA optimizado para salón compacto (menor latencia)
+  constexpr int tdmaCycleMs = 200;          // Ciclo más rápido para espacio pequeño
+  constexpr int tdmaSlotDurationMs = 40;    // Slots muy cortos
+  constexpr int responseTimeout = 60;       // Timeout reducido
+  constexpr int roundDelay = 20;            // Delay mínimo
 }
 
 // ===== CONFIGURACIÓN LEGACY (compatibilidad) =====
@@ -148,8 +148,8 @@ namespace cfg_indoor {
 #define STATUS_UPDATE_INTERVAL 1000 // Estado cada segundo
 #define METRICS_REPORT_INTERVAL 15000 // Métricas cada 15s
 
-// ===== ZONAS INDOOR PARA PRUEBAS =====
-#define NUM_ZONES 4                 // Menos zonas para casa
+// ===== ZONAS INDOOR PARA SALÓN COMPACTO (3.45x5.40m) =====
+#define NUM_ZONES 4                 // Zonas principales del salón compacto
 
 struct ZoneConfig {
   float x, y, radius;
@@ -157,23 +157,23 @@ struct ZoneConfig {
   const char* name;
 };
 
-// ZONAS ADAPTADAS SEGÚN PLANO REAL DE TU CASA (8x6m)
+// ZONAS OPTIMIZADAS PARA LA DISTRIBUCIÓN REAL DE ANCLAS (3.45x5.40m)
 const ZoneConfig INDOOR_ZONES[NUM_ZONES] = {
-  {1.5f, 5.0f, 1.2f, 500, "Zona_Sofa"},      // Zona del sofá (esquina superior izquierda)
-  {6.5f, 5.0f, 1.0f, 500, "Zona_TV"},        // Zona de la TV (esquina superior derecha)
-  {2.5f, 3.0f, 1.0f, 1000, "Zona_Mesa_Centro"}, // Mesa del centro
-  {2.0f, 1.5f, 1.0f, 500, "Zona_Mesa_Sur"}   // Mesa inferior
+  {0.8f, 3.8f, 0.7f, 750, "Zona_Sofa"},        // Cerca de anclas izquierdas (buena cobertura)
+  {2.8f, 1.5f, 0.8f, 500, "Zona_TV"},          // Entre ambos lados (cobertura equilibrada)
+  {1.7f, 2.5f, 1.0f, 1000, "Zona_Centro"},     // Centro geométrico (máxima precisión)
+  {1.2f, 0.8f, 0.6f, 500, "Zona_Entrada"}      // Cerca de ancla derecha inferior
 };
 
-// ===== POSICIONES DE ANCLAS SEGÚN PLANO REAL (8x6m) =====
-// Posiciones exactas según tu dibujo
-const float ANCHOR_POSITIONS[MAX_ANCHORS][2] = {
-  {-0.5f, -0.5f},   // Ancla 10 - Esquina inferior izquierda
-  {-0.5f, 6.5f},    // Ancla 20 - Esquina superior izquierda  
-  {8.5f, -0.5f},    // Ancla 30 - Esquina inferior derecha
-  {8.5f, 6.5f},     // Ancla 40 - Esquina superior derecha
-  {4.0f, -0.5f}     // Ancla 50 - Centro inferior
-};
+// ===== POSICIONES DE ANCLAS PARA SALÓN REAL (3.45x5.40m) =====
+// Distribución estratégica optimizada para máxima cobertura en espacio compacto
+  const float ANCHOR_POSITIONS[MAX_ANCHORS][2] = {
+    {0.0f, 1.10f},      // Ancla 10 - Esquina inferior izquierda (0, 1.10)
+    {0.0f, 2.25f},     // Ancla 20 - Esquina superior izquierda (0, 2.25)  
+    {0.0f, 4.55f},     // Ancla 30 - Esquina inferior derecha (0.30, 0.66), 4.55
+    {3.45f, 0.0f},    // Ancla 40 - Esquina superior derecha (6.30, 3.50)
+    {3.45f, 0.66f}     // Ancla 50 - Centro exacto del salón (3.45, 0.66)
+  };
 
 // IDs de las 5 anclas (mantener igual)
 const int ANCHOR_IDS[MAX_ANCHORS] = {10, 20, 30, 40, 50};
@@ -186,7 +186,7 @@ static_assert(sizeof(ANCHOR_IDS)/sizeof(ANCHOR_IDS[0]) == MAX_ANCHORS,
 
 // ===== CONFIGURACIÓN DE VISUALIZACIÓN INDOOR =====
 #ifndef PIXELS_PER_M
-#define PIXELS_PER_M 50.0           // Más pixels por metro para indoor (mayor zoom)
+#define PIXELS_PER_M 80.0           // Más píxeles por metro para salón pequeño (máximo detalle)
 #endif
 
 // ===== CONFIGURACIÓN DE MEMORIA =====

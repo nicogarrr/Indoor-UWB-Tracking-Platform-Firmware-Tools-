@@ -381,9 +381,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
     // Cálculo de posición por trilateración
     function calculateTagPosition() {
-        // COHERENCIA TFG: Configuración del espacio físico (plano real)
-        const areaWidth = 8.0;   // metros - PLANO REAL CASA
-        const areaHeight = 6.0;  // metros - PLANO REAL CASA  
+        // COHERENCIA TFG: Configuración del espacio físico (salón real corregido)
+        const areaWidth = 3.45;   // metros - SALÓN REAL (ancho corregido)
+        const areaHeight = 5.40;  // metros - SALÓN REAL (largo corregido)  
         const scale = PIXELS_PER_M; // TFG v2.1-PRODUCTION: Fuente única de verdad
         const margin = 20;       // margen en píxeles
         
@@ -474,13 +474,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
         const currentAnchorsToRender = window.currentAnchorsData || anchors; // Usar datos actualizados
 
-        // COHERENCIA TFG: Posiciones de anclas según plano real (8x6m)
+        // COHERENCIA TFG: Posiciones de anclas REALES ACTUALES (3.45x5.40m)
         const anchorsPosMetros = [
-          { id: 10, x: -0.5, y: -0.5 },   // Esquina inferior izquierda
-          { id: 20, x: -0.5, y: 6.5 },    // Esquina superior izquierda  
-          { id: 30, x: 8.5, y: -0.5 },    // Esquina inferior derecha
-          { id: 40, x: 8.5, y: 6.5 },     // Esquina superior derecha
-          { id: 50, x: 4.0, y: -0.5 }     // Centro inferior
+          { id: 10, x: 0.0, y: 1.10 },       // Lado izquierdo - inferior
+          { id: 20, x: 0.0, y: 2.25 },       // Lado izquierdo - medio  
+          { id: 30, x: 0.0, y: 4.55 },       // Lado izquierdo - superior
+          { id: 40, x: 3.45, y: 0.0 },       // Lado derecho - inferior
+          { id: 50, x: 3.45, y: 0.66 }       // Lado derecho - medio-bajo
         ];
 
         const border = document.createElement('div');
@@ -1552,13 +1552,13 @@ void loop() {
         if (responding_anchors >= 3) { 
           // Calcular posición del tag usando multilateración PONDERADA
           
-          // POSICIONES OPTIMIZADAS SEGÚN PLANO REAL (8x6m)
+          // POSICIONES REALES ACTUALES (3.45x5.40m)
           float anchorsPos[NUM_ANCHORS][2] = {
-            {-0.5, -0.5},  // Ancla 10 - Esquina inferior izquierda
-            {-0.5, 6.5},   // Ancla 20 - Esquina superior izquierda  
-            {8.5, -0.5},   // Ancla 30 - Esquina inferior derecha
-            {8.5, 6.5},    // Ancla 40 - Esquina superior derecha
-            {4.0, -0.5}    // Ancla 50 - Centro inferior
+            {0.0, 1.10},     // Ancla 10 - Lado izquierdo inferior  
+            {0.0, 2.25},     // Ancla 20 - Lado izquierdo medio
+            {0.0, 4.55},     // Ancla 30 - Lado izquierdo superior
+            {3.45, 0.0},     // Ancla 40 - Lado derecho inferior
+            {3.45, 0.66}     // Ancla 50 - Lado derecho medio-bajo
           };
           
           // MEJORA TFG: Filtrar anclas válidas para WLS robusto
