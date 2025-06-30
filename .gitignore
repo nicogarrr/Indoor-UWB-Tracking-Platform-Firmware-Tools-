@@ -43,4 +43,13 @@ logs/
 
 # ===== SISTEMA =====
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# ===== ARTEFACTOS SISTEMA UWB =====
+outputs/
+processed_data/
+uwb_logs_mqtt/
+uwb_replay_csv/
+# Ignorar CSV y PNG grandes generados automáticamente
+*.csv
+*.png 
