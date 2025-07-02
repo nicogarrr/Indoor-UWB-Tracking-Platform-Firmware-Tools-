@@ -386,7 +386,7 @@ class UWBDataAnalyzer:
         ax2.set_xlabel('RSSI (dBm)')
         ax2.set_ylabel('Frecuencia')
         ax2.legend()
-        ax2.grid(True, alpha=0.3)
+            ax2.grid(True, alpha=0.3)
         
         # 3. Timeline de mediciones por ancla
         ax3 = axes[1, 0]
@@ -408,8 +408,8 @@ class UWBDataAnalyzer:
         # 4. Distancias a anclas vs tiempo
         ax4 = axes[1, 1]
         anchor_cols = ['anchor_1_dist', 'anchor_2_dist', 'anchor_3_dist', 'anchor_4_dist', 'anchor_5_dist']
-        
-        for i, col in enumerate(anchor_cols):
+            
+            for i, col in enumerate(anchor_cols):
             if col in df_pos.columns:
                 # Filtrar valores válidos (no cero)
                 valid_data = df_pos[df_pos[col] > 0]
@@ -421,7 +421,7 @@ class UWBDataAnalyzer:
         ax4.set_xlabel('Índice temporal')
         ax4.set_ylabel('Distancia (m)')
         ax4.legend()
-        ax4.grid(True, alpha=0.3)
+            ax4.grid(True, alpha=0.3)
         
         plt.tight_layout()
         
