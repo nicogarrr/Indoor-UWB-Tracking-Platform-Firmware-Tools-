@@ -8,6 +8,8 @@
 #include <PubSubClient.h>
 #include <cmath>  // Para fabs, sqrt, etc.
 #include <ArduinoJson.h>
+#include "esp_wifi.h"
+#include "esp_bt.h"
 
 // ===== IDENTIFICACIÓN DEL TAG =====
 #define TAG_ID 1 // 
@@ -843,6 +845,9 @@ void setupWiFi() {
   } else {
     Serial.print("Configuring WiFi mode STA...");
     WiFi.mode(WIFI_STA);
+    // Desactivar Wi-Fi Power-Save para latencia mínima
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    WiFi.setSleep(false);
     Serial.println(" Done.");
     Serial.print("Beginning WiFi connection to SSID: ");
     Serial.println(STA_SSID);
@@ -1143,6 +1148,10 @@ bool checkMQTTFlowControl() {
 void setup() {
   Serial.begin(115200);
   Serial.println("\n=== UWB TAG with WiFi, Web Server, and SD Logging ===\n");
+  
+  // Desactivar Bluetooth para liberar CPU/RAM y reducir latencia
+  btStop();
+  esp_bt_controller_disable();
   
   setupWiFi();
   
