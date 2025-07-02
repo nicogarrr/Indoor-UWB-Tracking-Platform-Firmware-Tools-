@@ -9,34 +9,23 @@ secrets.h
 # ===== PYTHON =====
 __pycache__/
 *.py[cod]
-*$py.class
 *.pyc
-*.pyo
-*.pyd
 .Python
-env/
 venv/
-ENV/
-env.bak/
-venv.bak/
+env/
 
-# ===== PLATFORMIO =====
+# ===== PLATFORMIO/ARDUINO =====
 .pio/
 .vscode/
 lib/
-.gitignore.backup
 
 # ===== COMPILACIÓN =====
 *.bin
 *.elf
 *.map
 
-# ===== LOGS Y DATOS =====
+# ===== LOGS Y TEMPORALES =====
 *.log
-data/
-logs/
-
-# ===== TEMPORALES =====
 *.tmp
 *.bak
 *~
@@ -45,11 +34,8 @@ logs/
 .DS_Store
 Thumbs.db
 
-# ===== ARTEFACTOS SISTEMA UWB =====
+# ===== DATOS GENERADOS AUTOMÁTICAMENTE =====
+# (uwb_data/ se incluye manualmente con git add -f)
 outputs/
 processed_data/
-uwb_logs_mqtt/
-uwb_replay_csv/
-# Ignorar CSV y PNG grandes generados automáticamente
-*.csv
 *.png 

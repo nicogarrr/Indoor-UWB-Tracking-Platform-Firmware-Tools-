@@ -1,24 +1,17 @@
 [tool.pyright]
-# Configuración para el TFG UWB - Sistema optimizado
+# Configuración básica para TFG UWB
 pythonVersion = "3.8"
 typeCheckingMode = "basic"
 
-# Silenciar warnings específicos que no afectan funcionalidad
-reportAttributeAccessIssue = false
-reportOptionalSubscript = false  
-reportArgumentType = false
-reportOperatorIssue = false
-reportOptionalMemberAccess = false
-
-# Mantener solo errores críticos
+# Solo errores críticos
 reportMissingImports = true
 reportUndefinedVariable = true
 reportSyntaxError = true
 
-[tool.black]
-line-length = 120
-target-version = ['py38']
+# Silenciar warnings no críticos
+reportAttributeAccessIssue = false
+reportOptionalSubscript = false
 
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta" 
