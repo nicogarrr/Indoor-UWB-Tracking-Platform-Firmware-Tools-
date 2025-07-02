@@ -675,7 +675,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         // Vértices del hexágono en metros (en orden)
         const hexVertices = [
           { x: -6.9, y: -2   }, // V1
-          { x: -1.6, y: 10.36}, // V2
+          { x: -2.6, y: 7.92}, // V2 - Actualizado con nueva posición Ancla 2
           { x:  2.1, y: 10.36}, // V3
           { x:  6.8, y: -1.8 }, // V4
           { x:  0.0, y: -1.8 }, // V5
@@ -685,7 +685,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         // Posiciones de anclas con IDs
         const anchorsPosMetros = [
           { id: 1, x: -6.0,  y: 0.0  },
-          { id: 2, x: -1.6, y: 10.36},
+          { id: 2, x: -2.6, y: 7.92},
           { id: 3, x:  2.1, y: 10.36},
           { id: 4, x:  6.35, y: 0.0 },
           { id: 5, x:  0.0, y: -1.8 }
