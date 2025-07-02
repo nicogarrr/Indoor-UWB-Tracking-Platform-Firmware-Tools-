@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sistema Avanzado de Replay UWB para Fútbol Sala
+Sistema Avanzado de Replay UWB para Área Hexagonal Indoor
 Reproductor interactivo en tiempo real de datos de movimiento
 Con filtros avanzados, predicción ML y suavizado de trayectorias
 """
@@ -22,22 +22,31 @@ import warnings
 
 class KalmanPositionFilter:
     """
-    Implementación del Filtro de Kalman para suavizar posiciones 2D.
-    Reduce el ruido en las posiciones calculadas para movimientos más naturales.
+    Implementación del Filtro de Kalman optimizado para UWB indoor.
+    Reduce el ruido y mejora la fluidez con parámetros específicos para movimiento humano.
     """
-    def __init__(self, initial_pos=None, process_noise=0.01, measurement_noise=0.1):
+    def __init__(self, initial_pos=None, process_noise=0.002, measurement_noise=0.2):
         # Dimensiones: estado = 4 (x, y, vx, vy), medición = 2 (x, y)
         self.state = np.zeros(4)  # [x, y, vx, vy]
         if initial_pos is not None:
             self.state[:2] = initial_pos
             
-        # Matriz de covarianza (incertidumbre inicial alta)
-        self.P = np.eye(4) * 1000
+        # Matriz de covarianza (incertidumbre inicial moderada)
+        self.P = np.eye(4) * 50  # Reducido aún más para convergencia más rápida
         
-        # Ruido del proceso (incertidumbre en la predicción)
-        self.Q = np.eye(4) * process_noise
+        # Ruido del proceso optimizado para movimiento humano
+        # Menor ruido = más suave, pero menos reactive a cambios reales
+        # REDUCIDO para eliminar tirones
+        self.Q = np.array([
+            [process_noise, 0, 0, 0],
+            [0, process_noise, 0, 0],
+            [0, 0, process_noise * 1.5, 0],  # Velocidad puede cambiar menos
+            [0, 0, 0, process_noise * 1.5]
+        ])
         
-        # Ruido de medición (incertidumbre en las mediciones)
+        # Ruido de medición optimizado para UWB
+        # Mayor ruido = más suavizado, menos reactivo a outliers
+        # AUMENTADO para ser más conservativo con mediciones ruidosas
         self.R = np.eye(2) * measurement_noise
         
         # Matriz de transición (modelo de movimiento lineal)
@@ -66,8 +75,21 @@ class KalmanPositionFilter:
         # Innovación (diferencia entre medición predicha y actual)
         y = measurement - self.H @ self.state
         
+        # OPTIMIZACIÓN: Detección de outliers en la innovación
+        innovation_magnitude = np.linalg.norm(y)
+        max_innovation = 3.0  # 3 metros máximo de salto esperado
+        
+        if innovation_magnitude > max_innovation:
+            # Si la innovación es muy grande, reducir la confianza en la medición
+            measurement_noise_factor = min(5.0, innovation_magnitude / max_innovation)
+            R_adaptive = self.R * measurement_noise_factor
+            if hasattr(self, 'debug_mode') and self.debug_mode:
+                print(f"🚨 Outlier Kalman: innovación={innovation_magnitude:.2f}m, factor={measurement_noise_factor:.1f}")
+        else:
+            R_adaptive = self.R
+        
         # Covarianza de la innovación
-        S = self.H @ self.P @ self.H.T + self.R
+        S = self.H @ self.P @ self.H.T + R_adaptive
         
         # Ganancia de Kalman
         K = self.P @ self.H.T @ np.linalg.inv(S)
@@ -107,9 +129,9 @@ class KalmanPositionFilter:
 class TrajectoryPredictor:
     """
     Predicción de trayectorias usando Gaussian Process Regression (GPR)
-    optimizado para movimientos de fútbol sala.
+    optimizado para movimientos indoor.
     """
-    def __init__(self, context="futsal"):
+    def __init__(self, context="indoor"):
         self.context = context
         self.x_model = None
         self.y_model = None
@@ -118,7 +140,7 @@ class TrajectoryPredictor:
         self.min_ts = 0
         self.max_ts = 0
         
-        # Kernel optimizado para fútbol sala
+        # Kernel optimizado para movimiento indoor
         length_scale_bounds = (1e-3, 25.0)
         noise_level_bounds = (1e-8, 1.0)
         
@@ -195,7 +217,7 @@ class TrajectoryPredictor:
         
         Args:
             target_timestamps: Lista de timestamps objetivo en millisegundos
-            max_speed: Velocidad máxima permitida en m/s (default: 7.0 m/s para fútbol sala)
+            max_speed: Velocidad máxima permitida en m/s (default: 7.0 m/s para movimiento indoor)
             
         Returns:
             List[[x, y]]: Lista de posiciones predichas, o None/[] si error
@@ -253,7 +275,7 @@ class TrajectoryPredictor:
         
         return predictions
 
-class FutsalReplaySystem:
+class UWBHexagonReplaySystem:
     def __init__(self, csv_file, optimize_memory=False, skip_trail=False, verbose_debug=False):
         """
         Inicializar el sistema de replay avanzado
@@ -264,7 +286,7 @@ class FutsalReplaySystem:
             skip_trail: Flag para omitir trayectoria en tiempo real (reduce memoria)
             verbose_debug: Flag para mostrar todos los logs de debug GPR (puede ser spam)
         """
-        print(" Cargando Sistema Avanzado de Replay UWB...")
+        print("🔷 Cargando Sistema Avanzado de Replay UWB...")
         
         # Configuración avanzada
         self.use_kalman_filter = True
@@ -274,18 +296,20 @@ class FutsalReplaySystem:
         self.verbose_debug = verbose_debug
         self.debug_log_counter = 0  # Contador para limitar spam de logs
         
-        # Ajustar parámetros según optimización de memoria y trail
+        # Configuración de trayectoria (ahora SIEMPRE completa)
+        # NOTA: La trayectoria ahora siempre se muestra completa desde el inicio
         if skip_trail:
-            self.trail_length = 20  # Máximo 20 puntos cuando no se muestra trail
-            print(f" Trail simplificado: {self.trail_length} puntos (skip_trail activado)")
+            print(" Trail simplificado: trayectoria completa pero sin efectos visuales")
         elif optimize_memory:
-            self.trail_length = 50  # Reducir trail para datasets grandes
-            print(" Modo optimización de memoria activado (trail reducido)")
+            print(" Modo optimización de memoria: trayectoria completa optimizada")
         else:
-            self.trail_length = 100  # Trail completo por defecto
+            print(" Trayectoria completa con todos los efectos visuales")
+        
+        # trail_length ya no se usa - mantenemos toda la trayectoria visible
+        self.trail_length = None  # No se usa más, trayectoria completa
         
         self.animation_step_ms = 20  # 50 FPS
-        self.max_player_speed = 7.0  # m/s (velocidad sprint fútbol sala - límite físico)
+        self.max_player_speed = 7.0  # m/s (velocidad sprint indoor - límite físico)
         self.interpolation_threshold = 100  # ms
         # Intervalo mínimo entre reentrenamientos GPR (para acelerar en datasets grandes)
         self.gpr_train_interval_ms = 500  # solo reentrenar cada 0.5 s de datos faltantes
@@ -293,7 +317,7 @@ class FutsalReplaySystem:
         
         # Filtros y predictores
         self.kalman_filter = None
-        self.trajectory_predictor = TrajectoryPredictor("futsal")
+        self.trajectory_predictor = TrajectoryPredictor("indoor")
         
         # Datos procesados - Inicializar como None
         self.original_df = None
@@ -417,7 +441,7 @@ class FutsalReplaySystem:
         return None
     
     def apply_intelligent_interpolation(self):
-        """Aplicar interpolación inteligente con ML y Kalman"""
+        """Aplicar interpolación inteligente con ML y Kalman optimizada para fluidez"""
         if self.original_df is None:
             return None
             
@@ -427,10 +451,24 @@ class FutsalReplaySystem:
             for ts in self.original_df['timestamp']
         ], dtype=np.float64)
         
+        # OPTIMIZACIÓN: Paso adaptativo basado en la frecuencia original
+        original_avg_interval = np.mean(np.diff(timestamps_ms))
+        print(f"🔍 Intervalo original promedio: {original_avg_interval:.1f}ms")
+        
+        # Si los datos son muy esparsos (>500ms), usar pasos más grandes inicialmente
+        if original_avg_interval > 500:
+            # Para datos esparsos: 30fps (33ms) es mejor que 60fps para evitar overprocessing
+            fluid_step_ms = 33.33  
+            print("⚡ Usando 30fps para datos esparsos")
+        else:
+            # Para datos densos: 60fps completo
+            fluid_step_ms = 16.67  
+            print("⚡ Usando 60fps para datos densos")
+        
         # Crear timeline completo con step fijo (incluir último instante)
         start_ms = 0
         end_ms = timestamps_ms[-1]
-        full_timeline = np.arange(start_ms, end_ms + self.animation_step_ms, self.animation_step_ms)
+        full_timeline = np.arange(start_ms, end_ms + fluid_step_ms, fluid_step_ms)
         
         # Preparar datos para interpolación
         positions = self.original_df[['x', 'y']].values
@@ -499,12 +537,15 @@ class FutsalReplaySystem:
                 
                 interpolated_positions.append(pos)
         
+        # NUEVO: Aplicar suavizado adicional con media móvil
+        smoothed_positions = self.apply_moving_average_smoothing(interpolated_positions)
+        
         # Crear DataFrame interpolado
         interpolated_df = pd.DataFrame({
             'timestamp': [self.original_df['timestamp'].iloc[0] + timedelta(milliseconds=ms) 
                          for ms in full_timeline],
-            'x': [pos[0] for pos in interpolated_positions],
-            'y': [pos[1] for pos in interpolated_positions],
+            'x': [pos[0] for pos in smoothed_positions],
+            'y': [pos[1] for pos in smoothed_positions],
             'tag_id': [self.original_df['tag_id'].iloc[0]] * len(full_timeline)
         })
         
@@ -535,6 +576,95 @@ class FutsalReplaySystem:
             })
         
         return interpolated_df
+    
+    def apply_moving_average_smoothing(self, positions_list, window_size=7):
+        """
+        Aplicar suavizado con media móvil para eliminar tirones.
+        MEJORADO: Ventana más grande y suavizado más agresivo para eliminar tirones hacia atrás.
+        
+        Args:
+            positions_list: Lista de posiciones [x, y]
+            window_size: Tamaño de la ventana deslizante (impar recomendado)
+            
+        Returns:
+            Lista de posiciones suavizadas
+        """
+        if len(positions_list) <= window_size:
+            return positions_list
+        
+        # === PASO 1: Aplicar detección de tirones y corrección ===
+        corrected_positions = self.detect_and_fix_jitter(positions_list)
+        
+        # === PASO 2: Suavizado con media móvil ===
+        smoothed = []
+        half_window = window_size // 2
+        
+        for i in range(len(corrected_positions)):
+            # Determinar límites de la ventana
+            start_idx = max(0, i - half_window)
+            end_idx = min(len(corrected_positions), i + half_window + 1)
+            
+            # Calcular media de la ventana
+            window_positions = corrected_positions[start_idx:end_idx]
+            avg_x = sum(pos[0] for pos in window_positions) / len(window_positions)
+            avg_y = sum(pos[1] for pos in window_positions) / len(window_positions)
+            
+            # Usar suavizado más agresivo en todas las posiciones
+            if i < half_window or i >= len(corrected_positions) - half_window:
+                # Extremos: 90% suavizado, 10% original para eliminar tirones
+                original_x, original_y = corrected_positions[i]
+                smooth_x = 0.9 * avg_x + 0.1 * original_x
+                smooth_y = 0.9 * avg_y + 0.1 * original_y
+                smoothed.append([smooth_x, smooth_y])
+            else:
+                # Centro: suavizado completo
+                smoothed.append([avg_x, avg_y])
+        
+        return smoothed
+        
+    def detect_and_fix_jitter(self, positions_list, jitter_threshold=1.5):
+        """
+        Detectar y corregir tirones hacia atrás (movimiento errático).
+        
+        Args:
+            positions_list: Lista de posiciones [x, y]
+            jitter_threshold: Umbral para detectar cambios bruscos de dirección (metros)
+            
+        Returns:
+            Lista de posiciones con tirones corregidos
+        """
+        if len(positions_list) < 3:
+            return positions_list
+        
+        corrected = positions_list.copy()
+        
+        for i in range(1, len(positions_list) - 1):
+            prev_pos = positions_list[i-1]
+            curr_pos = positions_list[i]
+            next_pos = positions_list[i+1]
+            
+            # Calcular vectores de movimiento
+            vec1 = [curr_pos[0] - prev_pos[0], curr_pos[1] - prev_pos[1]]
+            vec2 = [next_pos[0] - curr_pos[0], next_pos[1] - curr_pos[1]]
+            
+            # Calcular magnitudes
+            mag1 = np.sqrt(vec1[0]**2 + vec1[1]**2)
+            mag2 = np.sqrt(vec2[0]**2 + vec2[1]**2)
+            
+            # Detectar cambio brusco de dirección (tirón hacia atrás)
+            if mag1 > jitter_threshold and mag2 > jitter_threshold:
+                # Calcular producto escalar para detectar cambio de dirección
+                dot_product = vec1[0]*vec2[0] + vec1[1]*vec2[1]
+                
+                # Si el ángulo es > 120 grados (dot < -0.5), es un tirón
+                if dot_product < -0.5 * mag1 * mag2:
+                    # Corregir usando interpolación lineal
+                    corrected[i] = [
+                        (prev_pos[0] + next_pos[0]) * 0.5,
+                        (prev_pos[1] + next_pos[1]) * 0.5
+                    ]
+        
+        return corrected
     
     def linear_interpolation_fallback(self, positions_list, target_ms):
         """
@@ -575,30 +705,27 @@ class FutsalReplaySystem:
         return positions_list[-1]
     
     def setup_plot(self):
-        """Configurar la visualización de la cancha"""
-        # Crear figura con tamaño optimizado
+        """Configurar la visualización del área hexagonal indoor"""
+        # Crear figura y ejes
         self.fig, self.ax = plt.subplots(figsize=(18, 12))
-        
-        # Verificar si el manager existe antes de intentar establecer el título
+
+        # Intentar poner título de ventana (puede fallar en algunos backends)
         try:
             if hasattr(self.fig.canvas, 'manager') and self.fig.canvas.manager is not None:
-                self.fig.canvas.manager.set_window_title(' Sistema de Replay UWB - Fútbol Sala Profesional')
-        except:
-            pass  # Ignorar si no se puede establecer el título
+                self.fig.canvas.manager.set_window_title('Sistema de Replay UWB - Área Hexagonal')
+        except Exception:
+            pass
         
-        # Configurar cancha de fútbol sala (40x20m) con márgenes amplios
-        self.ax.set_xlim(-4, 44)
-        self.ax.set_ylim(-6, 24)  # Mucho más espacio abajo para zona actual
+        # ======================== ÁREA HEXAGONAL ========================
+        minX, maxX = -6.9, 6.8
+        minY, maxY = -3.5, 10.36
+        self.ax.set_xlim(minX - 1, maxX + 1)
+        self.ax.set_ylim(minY - 1, maxY + 1)
         self.ax.set_aspect('equal')
-        
-        # Color de fondo - Pabellón deportivo
-        self.ax.set_facecolor('#1a1a2e')  # Azul oscuro pabellón
-        
-        # Dibujar fondo de la cancha con degradado
-        self.draw_futsal_court_professional()
-        
-        # Dibujar anclas UWB
-        self.draw_uwb_anchors()
+        self.ax.set_facecolor('#f8f8f8')
+
+        self.draw_hexagon_area()
+        self.draw_hexagon_anchors()
         
         # Configurar elementos dinámicos
         self.setup_dynamic_elements()
@@ -606,190 +733,42 @@ class FutsalReplaySystem:
         # Panel de información
         self.setup_info_panel()
 
-    def draw_futsal_court_professional(self):
-        """Dibujar cancha de fútbol sala profesional con todos los elementos reglamentarios"""
-        
-        # === SUPERFICIE DE JUEGO ===
-        # Fondo principal de la cancha (parquet/cemento pulido)
-        court_surface = patches.Rectangle((0, 0), 40, 20, linewidth=0,
-                                        facecolor='#8B7355', alpha=0.9)  # Color parquet
-        self.ax.add_patch(court_surface)
-        
-        # Efecto de brillo en el centro (como parquet pulido)
-        center_shine = patches.Ellipse((20, 10), 25, 12, linewidth=0,
-                                     facecolor='#A0926B', alpha=0.3)
-        self.ax.add_patch(center_shine)
-        
-        # === LÍNEAS REGLAMENTARIAS ===
-        # Perímetro de la cancha (40x20m) - Línea más gruesa
-        court = patches.Rectangle((0, 0), 40, 20, linewidth=4, 
-                                edgecolor='white', facecolor='none')
-        self.ax.add_patch(court)
-        
-        # Línea central
-        self.ax.plot([20, 20], [0, 20], 'white', linewidth=3)
-        
-        # Círculo central (radio 3m) - FIFA
-        center_circle = patches.Circle((20, 10), 3, linewidth=3, 
-                                     edgecolor='white', facecolor='none')
-        self.ax.add_patch(center_circle)
-        
-        # Punto central
-        self.ax.plot(20, 10, 'wo', markersize=8)
-        
-        # === ÁREAS DE PORTERÍA ===
-        # Área de portería izquierda (semicírculo 6m)
-        penalty_left = patches.Wedge((0, 10), 6, -90, 90, linewidth=3,
-                                   edgecolor='white', facecolor='none')
-        self.ax.add_patch(penalty_left)
-        
-        # Área de portería derecha
-        penalty_right = patches.Wedge((40, 10), 6, 90, 270, linewidth=3,
-                                    edgecolor='white', facecolor='none')
-        self.ax.add_patch(penalty_right)
-        
-        # === PORTERÍAS PROFESIONALES ===
-        # Portería izquierda (3x2m) - Estructura 3D
-        # Postes
-        self.ax.plot([0, 0], [8.5, 11.5], 'white', linewidth=6)  # Poste más realista
-        
-        # Estructura de la portería (efecto 3D)
-        goal_left_back = patches.Rectangle((-1.2, 8.5), 1.2, 3, linewidth=2,
-                                         edgecolor='silver', facecolor='#f0f0f0', alpha=0.8)
-        self.ax.add_patch(goal_left_back)
-        
-        # Red (efecto visual)
-        for i in range(9, 12):
-            self.ax.plot([-1.2, 0], [i, i], 'gray', linewidth=0.5, alpha=0.6)
-        for i in range(-12, 1, 2):
-            self.ax.plot([i/10, i/10], [8.5, 11.5], 'gray', linewidth=0.5, alpha=0.6)
-        
-        # Portería derecha (3x2m)
-        self.ax.plot([40, 40], [8.5, 11.5], 'white', linewidth=6)
-        
-        goal_right_back = patches.Rectangle((40, 8.5), 1.2, 3, linewidth=2,
-                                          edgecolor='silver', facecolor='#f0f0f0', alpha=0.8)
-        self.ax.add_patch(goal_right_back)
-        
-        # Red portería derecha
-        for i in range(9, 12):
-            self.ax.plot([40, 41.2], [i, i], 'gray', linewidth=0.5, alpha=0.6)
-        for i in range(0, 13, 2):
-            self.ax.plot([40 + i/10, 40 + i/10], [8.5, 11.5], 'gray', linewidth=0.5, alpha=0.6)
-        
-        # === PUNTOS DE PENALTI ===
-        # Punto de penalti 6 metros
-        self.ax.plot(6, 10, 'wo', markersize=10)
-        self.ax.plot(34, 10, 'wo', markersize=10)
-        
-        # Punto de doble penalti 10 metros
-        self.ax.plot(10, 10, 'wo', markersize=8)
-        self.ax.plot(30, 10, 'wo', markersize=8)
-        
-        # === ESQUINAS REGLAMENTARIAS ===
-        # Cuartos de círculo radio 25cm (FIFA)
-        corners = [(0, 0), (0, 20), (40, 0), (40, 20)]
-        for x, y in corners:
-            if x == 0 and y == 0:  # Esquina inferior izquierda
-                corner = patches.Wedge((x, y), 0.25, 0, 90, linewidth=2,
-                                     edgecolor='white', facecolor='none')
-            elif x == 0 and y == 20:  # Esquina superior izquierda
-                corner = patches.Wedge((x, y), 0.25, 270, 360, linewidth=2,
-                                     edgecolor='white', facecolor='none')
-            elif x == 40 and y == 0:  # Esquina inferior derecha
-                corner = patches.Wedge((x, y), 0.25, 90, 180, linewidth=2,
-                                     edgecolor='white', facecolor='none')
-            else:  # Esquina superior derecha
-                corner = patches.Wedge((x, y), 0.25, 180, 270, linewidth=2,
-                                     edgecolor='white', facecolor='none')
-            self.ax.add_patch(corner)
-        
-        # === ELEMENTOS ADICIONALES FÚTBOL SALA ===
-        
-        # Línea de saque (línea discontinua a 3m de cada portería)
-        # Izquierda
-        for i in range(3, 18, 2):
-            self.ax.plot([3, 3], [i, i+0.8], 'white', linewidth=1.5, alpha=0.7)
-        # Derecha  
-        for i in range(3, 18, 2):
-            self.ax.plot([37, 37], [i, i+0.8], 'white', linewidth=1.5, alpha=0.7)
-        
-        # === BANQUILLOS Y ÁREA TÉCNICA ===
-        # Banquillo equipo local (lado izquierdo)
-        bench_local = patches.Rectangle((-3.5, 7), 2.5, 6, linewidth=2,
-                                      edgecolor='blue', facecolor='lightblue', alpha=0.7)
-        self.ax.add_patch(bench_local)
-        self.ax.text(-2.25, 10, 'EQUIPO\nLOCAL', ha='center', va='center',
-                    fontsize=8, fontweight='bold', color='darkblue')
-        
-        # Banquillo equipo visitante (lado derecho)
-        bench_visit = patches.Rectangle((41, 7), 2.5, 6, linewidth=2,
-                                      edgecolor='red', facecolor='lightcoral', alpha=0.7)
-        self.ax.add_patch(bench_visit)
-        self.ax.text(42.25, 10, 'EQUIPO\nVISITANTE', ha='center', va='center',
-                    fontsize=8, fontweight='bold', color='darkred')
-        
-        # Área técnica (línea de banda)
-        # Local
-        self.ax.plot([-0.1, -0.1], [5, 15], 'blue', linewidth=3, alpha=0.8)
-        # Visitante
-        self.ax.plot([40.1, 40.1], [5, 15], 'red', linewidth=3, alpha=0.8)
-        
-        # === ZONAS DE ANÁLISIS DEPORTIVO (sutiles) ===
-        # Zona defensiva local
-        defense_local = patches.Rectangle((0, 0), 13.33, 20, linewidth=0,
-                                        facecolor='lightblue', alpha=0.1)
-        self.ax.add_patch(defense_local)
-        
-        # Zona media
-        middle_zone = patches.Rectangle((13.33, 0), 13.34, 20, linewidth=0,
-                                      facecolor='yellow', alpha=0.1)
-        self.ax.add_patch(middle_zone)
-        
-        # Zona ofensiva
-        offense_zone = patches.Rectangle((26.67, 0), 13.33, 20, linewidth=0,
-                                       facecolor='lightcoral', alpha=0.1)
-        self.ax.add_patch(offense_zone)
-        
-        # === ILUMINACIÓN DEL PABELLÓN (efecto) ===
-        # Focos principales (4 esquinas)
-        spotlight_positions = [(-2, -2), (-2, 22), (42, -2), (42, 22)]
-        for x, y in spotlight_positions:
-            spotlight = patches.Circle((x, y), 0.8, linewidth=2,
-                                     edgecolor='yellow', facecolor='lightyellow', alpha=0.6)
-            self.ax.add_patch(spotlight)
+
     
-    def draw_uwb_anchors(self):
-        """Dibujar posiciones de anclas UWB con diseño mejorado"""
+
+    
+    def draw_hexagon_anchors(self):
+        """Dibujar anclas UWB en la disposición indoor"""
         anchors = {
-            'A10': (-1, -1, 'red', ''),        # Esquina Suroeste
-            'A20': (-1, 21, 'blue', ''),       # Esquina Noroeste  
-            'A30': (41, -1, 'green', ''),      # Esquina Sureste
-            'A40': (41, 21, 'orange', ''),     # Esquina Noreste
-            'A50': (20, -1, 'purple', '')      # Centro campo Sur
+            'A10': (-6.0, 0.0, 'blue'),
+            'A20': (-1.6, 10.36, 'blue'),
+            'A30': (2.1, 10.36, 'blue'),
+            'A40': (6.35, 0.0, 'blue'),
+            'A50': (0.0, -1.8, 'blue')
         }
+
+        for anchor_id, (x, y, color) in anchors.items():
+            self.ax.plot(x, y, 's', color=color, markersize=10, zorder=5)
+            self.ax.text(x, y + 0.3, anchor_id, ha='center', va='bottom', fontsize=9, color='black')
+    
+    def draw_hexagon_area(self):
+        """Dibujar el perímetro del hexágono irregular con vértices ordenados correctamente"""
+        # Vértices en orden horario empezando desde superior izquierdo
+        verts = [
+            (-6.9, -2),      # Vértice inferior izquierdo (corregido)
+            (-1.6, 10.36),   # Vértice superior izquierdo
+            (2.1, 10.36),    # Vértice superior derecho
+            (6.8, -1.8),     # Vértice inferior derecho
+            (0, -1.8),       # Vértice inferior centro
+            (-0.4, -3.5)     # Vértice inferior extremo
+        ]
+        poly = patches.Polygon(verts, closed=True, fill=False, edgecolor='orange', linewidth=3, alpha=0.8)
+        self.ax.add_patch(poly)
         
-        for anchor_id, (x, y, color, emoji) in anchors.items():
-            # Círculo de cobertura (sutil)
-            coverage = patches.Circle((x, y), 15, linewidth=1,
-                                    edgecolor=color, facecolor='none', 
-                                    alpha=0.2, linestyle='--')
-            self.ax.add_patch(coverage)
-            
-            # Ancla principal (más grande y visible)
-            self.ax.plot(x, y, 's', color=color, markersize=16, 
-                        markeredgecolor='white', markeredgewidth=3, zorder=15)
-            
-            # Símbolo UWB
-            self.ax.plot(x, y, marker='*', color='white', markersize=8, zorder=16)
-            
-            # Etiqueta mejorada
-            self.ax.annotate(f'{emoji} {anchor_id}', (x, y), xytext=(8, 8), 
-                           textcoords='offset points', color='white',
-                           fontsize=11, fontweight='bold', zorder=17,
-                           bbox=dict(boxstyle='round,pad=0.5', 
-                                   facecolor=color, alpha=0.9,
-                                   edgecolor='white', linewidth=1))
+        # Añadir etiquetas de vértices para debug
+        for i, (x, y) in enumerate(verts):
+            self.ax.plot(x, y, 'ro', markersize=6, alpha=0.7)
+            self.ax.text(x+0.2, y+0.2, f'V{i+1}', fontsize=8, color='red', alpha=0.8)
     
     def setup_dynamic_elements(self):
         """Configurar elementos que cambian durante la animación"""
@@ -803,27 +782,27 @@ class FutsalReplaySystem:
         self.player_number = self.ax.text(0, 0, '7', ha='center', va='center',
                                         fontsize=10, fontweight='bold', color='white', zorder=21)
         
-        # === TRAYECTORIA AVANZADA (optimizada según memoria) ===
+        # === TRAYECTORIA COMPLETA (toda la trayectoria visible) ===
         if not self.skip_trail:
             # Trayectoria principal con degradado
             self.trail_line, = self.ax.plot([], [], '-', color='#FF6B35', alpha=0.8, linewidth=3,
-                                           label='Trayectoria', zorder=10)
+                                           label='Trayectoria Completa', zorder=10)
             
             # Trayectoria secundaria (sombra)
             self.trail_shadow, = self.ax.plot([], [], '-', color='black', alpha=0.3, linewidth=5,
                                              zorder=9)
             
             # Puntos de trayectoria con tamaño variable
-            self.trail_dots, = self.ax.plot([], [], 'o', color='#FF8C42', alpha=0.4, markersize=4,
+            self.trail_dots, = self.ax.plot([], [], 'o', color='#FF8C42', alpha=0.4, markersize=3,
                                            zorder=11)
-            print(" Trayectoria en tiempo real habilitada")
+            print(" Trayectoria completa habilitada (toda la ruta visible)")
         else:
-            # Modo optimización: solo línea básica con menos puntos
+            # Modo optimización: solo línea básica pero completa
             self.trail_line, = self.ax.plot([], [], '-', color='#FF6B35', alpha=0.6, linewidth=2,
-                                           label='Trayectoria (optimizada)', zorder=10)
+                                           label='Trayectoria Completa (optimizada)', zorder=10)
             self.trail_shadow = None
             self.trail_dots = None
-            print(" Modo optimización memoria: trayectoria simplificada")
+            print(" Modo optimización memoria: trayectoria completa simplificada")
         
         # === INDICADORES DE VELOCIDAD ===
         # Círculo de velocidad (radio proporcional)
@@ -839,6 +818,10 @@ class FutsalReplaySystem:
                                        bbox=dict(boxstyle='round,pad=0.4', 
                                                facecolor='black', alpha=0.9,
                                                edgecolor='yellow', linewidth=1))
+        
+        # === TRAYECTORIA PERSISTENTE ===
+        # La trayectoria completa permanece visible durante todo el replay
+        # Desde el punto inicial hasta la posición actual del jugador
         
         # === MAPA DE CALOR ===
         # Eliminado para optimización de memoria - usar directamente self.df si se necesita
@@ -872,30 +855,25 @@ class FutsalReplaySystem:
         self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
         
     def get_player_zone(self, x, y):
-        """Determinar la zona actual del jugador con zonas más específicas"""
-        # Portería izquierda (área de 6m)
-        if x <= 6 and 4 <= y <= 16:
-            return "ÁREA LOCAL"
-        # Portería derecha (área de 6m)
-        elif x >= 34 and 4 <= y <= 16:
-            return "ÁREA VISITANTE"
-        # Círculo central
-        elif 17 <= x <= 23 and 7 <= y <= 13:
-            return "CENTRO"
-        # Zona defensiva local
-        elif x <= 13.33:
-            return "DEFENSA"
-        # Zona media
-        elif 13.33 < x <= 26.67:
-            return "MEDIO"
-        # Zona ofensiva
-        elif x > 26.67:
-            return "ATAQUE"
-        # Fuera de banda
-        elif x < 0 or x > 40 or y < 0 or y > 20:
-            return "FUERA"
+        """Determinar la zona actual del jugador en el área hexagonal indoor"""
+        # === ZONAS PARA ÁREA HEXAGONAL INDOOR ===
+        # Verificar si está dentro del área válida
+        if not (-6.9 <= x <= 6.8 and -3.5 <= y <= 10.36):
+            return "FUERA DEL ÁREA"
+        
+        # Zonas específicas del área indoor
+        if y >= 8.0:
+            return "ZONA NORTE"
+        elif y <= -1.0:
+            return "ZONA SUR"
+        elif x >= 4.0:
+            return "ZONA ESTE"
+        elif x <= -4.0:
+            return "ZONA OESTE"
+        elif -2.0 <= x <= 2.0 and 2.0 <= y <= 6.0:
+            return "ZONA CENTRAL"
         else:
-            return "JUEGO"
+            return "ÁREA INDOOR"
     
     def calculate_speed(self, frame_idx):
         """Calcular velocidad instantánea con límites realistas"""
@@ -920,7 +898,7 @@ class FutsalReplaySystem:
         speed = distance / dt  # m/s
         
         # === CORRECCIÓN: Limitar velocidades físicamente imposibles ===
-        # Velocidad máxima humana realista en fútbol sala: 8 m/s (incluye margen)
+        # Velocidad máxima humana realista indoor: 8 m/s (incluye margen)
         max_realistic_speed = 8.0
         
         if speed > max_realistic_speed:
@@ -962,26 +940,25 @@ class FutsalReplaySystem:
         # Número del jugador (sigue al jugador)
         self.player_number.set_position((x, y))
         
-        # === ACTUALIZAR TRAYECTORIA (optimizada según memoria) ===
+        # === ACTUALIZAR TRAYECTORIA COMPLETA (desde inicio hasta posición actual) ===
         if not self.skip_trail:
-            start_idx = max(0, frame_idx - self.trail_length)
-            trail_data = self.df.iloc[start_idx:frame_idx + 1]
+            # Mostrar TODA la trayectoria desde el inicio hasta el frame actual
+            trail_data = self.df.iloc[0:frame_idx + 1]
             
             if len(trail_data) > 1:
-                # Trayectoria principal
+                # Trayectoria principal completa
                 self.trail_line.set_data(trail_data['x'], trail_data['y'])
                 
-                # Sombra de la trayectoria (solo si no está optimizado)
+                # Sombra de la trayectoria completa (solo si no está optimizado)
                 if self.trail_shadow:
                     self.trail_shadow.set_data(trail_data['x'], trail_data['y'])
                 
-                # Puntos de trayectoria con degradado (solo si no está optimizado)
+                # Puntos de trayectoria completa con degradado (solo si no está optimizado)
                 if self.trail_dots:
                     self.trail_dots.set_data(trail_data['x'], trail_data['y'])
         else:
-            # Modo optimización: solo línea básica con menos puntos
-            start_idx = max(0, frame_idx - 20)  # Solo 20 puntos en modo optimizado
-            trail_data = self.df.iloc[start_idx:frame_idx + 1]
+            # Modo optimización: trayectoria completa pero simplificada
+            trail_data = self.df.iloc[0:frame_idx + 1]
             if len(trail_data) > 1:
                 self.trail_line.set_data(trail_data['x'], trail_data['y'])
         
@@ -1312,7 +1289,7 @@ def generate_movement_report(csv_file):
     frame_speeds = step_distances * freq  # velocidad por frame
     
     # Aplicar límite físico realista
-    max_realistic_speed = 8.0  # m/s - límite humano fútbol sala
+    max_realistic_speed = 8.0  # m/s - límite humano indoor
     frame_speeds = np.clip(frame_speeds, 0, max_realistic_speed)
     
     max_speed = frame_speeds.max() if len(frame_speeds) > 0 else 0
@@ -1337,7 +1314,7 @@ def generate_movement_report(csv_file):
     # === ANÁLISIS DE REALISMO ===
     if avg_speed > 4.0:
         print(f"⚠️  ADVERTENCIA: Velocidad promedio muy alta ({avg_speed:.1f} m/s)")
-        print("   Velocidad típica fútbol sala: 1.5-3.0 m/s promedio")
+        print("   Velocidad típica indoor: 1.5-3.0 m/s promedio")
     elif avg_speed < 0.5:
         print(f"ℹ️  INFO: Velocidad promedio baja ({avg_speed:.1f} m/s) - movimiento lento o estático")
     else:
@@ -1467,7 +1444,7 @@ def select_replay_file_interactive():
 def main():
     """Función principal"""
     parser = argparse.ArgumentParser(
-        description=' Sistema de Replay UWB para Fútbol Sala',
+        description='🔷 Sistema de Replay UWB para Área Hexagonal Indoor',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ejemplos de uso:
@@ -1514,7 +1491,7 @@ Ejemplos de uso:
             generate_movement_report(selected_file)
             
             # Iniciar sistema de replay
-            replay_system = FutsalReplaySystem(selected_file, args.optimize_memory, args.skip_trail, args.verbose_debug)
+            replay_system = UWBHexagonReplaySystem(selected_file, args.optimize_memory, args.skip_trail, args.verbose_debug)
             replay_system.start_replay()
             
     except KeyboardInterrupt:
