@@ -41,8 +41,8 @@ const char* logServerIp = "172.20.10.2"; // Tu PC real en la red iPhone hotspot
 const int logServerPort = 5000;             // Port your Python receiver will listen on
 
 // ===== TDMA Configuration (INDOOR) =====
-const unsigned long TDMA_CYCLE_MS = 80; // REDUCIDO: Ciclo más rápido (80ms vs 100ms)
-const unsigned long TDMA_SLOT_DURATION_MS = 30; // REDUCIDO: Slots más rápidos para indoor
+const unsigned long TDMA_CYCLE_MS = 60; // NUEVO: Ciclo más rápido (60ms)
+const unsigned long TDMA_SLOT_DURATION_MS = 20; // NUEVO: Slots más rápidos (20ms)
 
 // ===== CONFIGURACIÓN DE RANGING =====
 #define ROUND_DELAY 100
