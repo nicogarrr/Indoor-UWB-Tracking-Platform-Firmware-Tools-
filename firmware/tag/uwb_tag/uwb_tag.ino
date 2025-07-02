@@ -13,6 +13,9 @@
 // ===== IDENTIFICACIÓN DEL TAG =====
 #define TAG_ID 1 
 
+
+const uint32_t WS_SEND_INTERVAL_MS = 33; // 1000/33 ≈ 30 fps
+
 // ===== CONFIGURACIÓN WiFi =====
 #define USE_AP_MODE false
 #define AP_SSID "UWB_TAG_AP"
@@ -1025,10 +1028,11 @@ void publishStatus() {
 
 void broadcastWebSocket(){
   static uint32_t lastWs=0;
-  if(millis()-lastWs<16) return; 
-  String json=getDataJson();
+  uint32_t now = millis();
+  if(now - lastWs < WS_SEND_INTERVAL_MS) return; // limitar a 30 fps
+  String json = getDataJson();
   ws.textAll(json);
-  lastWs=millis();
+  lastWs = now;
 }
 
 // ===== FUNCIÓN DE BUFFERING ESTABILIZADO =====
