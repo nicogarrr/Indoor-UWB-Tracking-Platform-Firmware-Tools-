@@ -3,8 +3,7 @@
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <WiFiUdp.h>
-#define MQTT_MAX_PACKET_SIZE 2048 // AUMENTADO: Buffer más grande para evitar fragmentación
+#define MQTT_MAX_PACKET_SIZE 2048 
 #include <PubSubClient.h>
 #include <cmath>  // Para fabs, sqrt, etc.
 #include <ArduinoJson.h>
@@ -12,7 +11,7 @@
 #include "esp_bt.h"
 
 // ===== IDENTIFICACIÓN DEL TAG =====
-#define TAG_ID 1 // 
+#define TAG_ID 1 
 
 // ===== CONFIGURACIÓN WiFi =====
 #define USE_AP_MODE false
@@ -21,30 +20,26 @@
 #define STA_SSID "iPhone de Nicolas"
 #define STA_PASS "12345678"
 
-// Configuraciones del servidor y UDP
+// Configuraciones del servidor 
 #define HTTP_PORT 80
-#define UDP_PORT 5555
-#undef server // por si estaba definido
 AsyncWebServer server(HTTP_PORT);
 AsyncWebSocket ws("/ws");
-WiFiUDP udp;
-IPAddress broadcastIP(255, 255, 255, 255);
 
 // MQTT Configuration
-const char* mqtt_server = "172.20.10.2"; // Broker IP (Your PC real IP)
+const char* mqtt_server = "172.20.10.2"; 
 const int mqtt_port = 1883;
-const char* log_topic = "uwb/tag/logs";       // Topic for detailed CSV logs
-char status_topic[30];                      // Topic for simple status (constructed in setup)
+const char* log_topic = "uwb/tag/logs";       
+char status_topic[30];                      
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 // ===== Configuration for WiFi Logging =====
-const char* logServerIp = "172.20.10.2"; // Tu PC real en la red iPhone hotspot
-const int logServerPort = 5000;             // Port your Python receiver will listen on
+const char* logServerIp = "172.20.10.2"; 
+const int logServerPort = 5000;             
 
 // ===== TDMA Configuration (INDOOR) =====
-const unsigned long TDMA_CYCLE_MS = 60; // NUEVO: Ciclo más rápido (60ms)
-const unsigned long TDMA_SLOT_DURATION_MS = 20; // NUEVO: Slots más rápidos (20ms)
+const unsigned long TDMA_CYCLE_MS = 60; 
+const unsigned long TDMA_SLOT_DURATION_MS = 20; 
 
 // ===== CONFIGURACIÓN DE RANGING =====
 #define ROUND_DELAY 100
@@ -67,85 +62,80 @@ static float distance = 0;
 
 // Configuraciones para mediciones y filtrado (INDOOR)
 #define NUM_MEASUREMENTS 3
-#define NUM_ANCHORS 5  // CORREGIDO: 5 anclas para salón indoor
-int ID_PONG[NUM_ANCHORS] = {1, 2, 3, 4, 5}; // IDs de las 5 anclas (lógico = físico)
+#define NUM_ANCHORS 5 
+int ID_PONG[NUM_ANCHORS] = {1, 2, 3, 4, 5}; 
 float distance_buffer[NUM_ANCHORS][NUM_MEASUREMENTS] = { {0} };
 int buffer_index[NUM_ANCHORS] = {0};
 float anchor_distance[NUM_ANCHORS] = {0};
 float anchor_avg[NUM_ANCHORS] = {0};
 float pot_sig[NUM_ANCHORS] = {0};
 static int fin_de_com = 0;
-bool anchor_responded[NUM_ANCHORS] = {false}; // Added: Array to track anchor responses
+bool anchor_responded[NUM_ANCHORS] = {false}; 
 
-// Variables para timeout OPTIMIZADAS
+// Variables para timeout 
 unsigned long timeoutStart = 0;
 bool waitingForResponse = false;
-const unsigned long RESPONSE_TIMEOUT = 35; // REDUCIDO: 35ms vs 60ms para eliminar gaps grandes
+const unsigned long RESPONSE_TIMEOUT = 35; 
 
-// Variables para gestor de estados OPTIMIZADAS
+// Variables para gestor de estados 
 unsigned long lastUpdate = 0;
-unsigned long updateInterval = 12; // AUMENTADO: 83Hz para máxima responsividad (12ms vs 15ms)
+unsigned long updateInterval = 12; 
 
 // Variables para modo de bajo consumo
 unsigned long lastActivityTime = 0;
 const unsigned long SLEEP_TIMEOUT = 300000;
 bool lowPowerMode = false;
 
-// Variables para Filtro de Kalman (INDOOR optimizado)
+// Variables para Filtro de Kalman 
 float kalman_dist[NUM_ANCHORS][2] = { {0} };
-float kalman_dist_q = 0.005; // REDUCIDO: Menos ruido para más estabilidad
-float kalman_dist_r = 0.08; // Observación más precisa en indoor
+float kalman_dist_q = 0.005; 
+float kalman_dist_r = 0.08; 
 
-// Variables para posición (INDOOR)
+// Variables para posición 
 float kalman_x = 0.0;
 float kalman_y = 0.0;
 float kalman_p_x = 1.0;
 float kalman_p_y = 1.0;
-float kalman_q = 0.01; // REDUCIDO: Posición más estable
-float kalman_r = 0.05; // Observación más precisa
+float kalman_q = 0.01; 
+float kalman_r = 0.05; 
 
 // Variables para la posición del tag
 float tagPositionX = 0.0;
 float tagPositionY = 0.0;
 
-// NUEVO: Variables para trilateración inteligente (Opción A)
-int last_anchor_combination[3] = {0, 1, 2}; // Últimas 3 anclas usadas
+// Variables para trilateración inteligente 
+int last_anchor_combination[3] = {0, 1, 2}; 
 unsigned long last_trilateration_time = 0;
-float last_valid_position[2] = {0.0, 0.0}; // Última posición válida
-bool combination_stable = false; // Si la combinación actual es estable
-float rssi_threshold = 5.0; // dBm - margen para cambiar ancla
-float validation_threshold = 1.0; // metros - error máximo permitido
+float last_valid_position[2] = {0.0, 0.0}; 
+bool combination_stable = false; 
+float rssi_threshold = 5.0; 
+float validation_threshold = 1.0; 
 
 // ===== POSICIONES DE ANCLAS GLOBALES (anclas 1-5) =====
 const float anchorsPos[NUM_ANCHORS][2] = {
   {-6.0,  0.0},   // Ancla 1 (índice 0) - Oeste
-  {-2.6,  7.92},  // Ancla 2 (índice 1) - Noroeste OPTIMIZADA v2
+  {-2.6,  7.92},  // Ancla 2 (índice 1) - Noroeste 
   { 2.1, 10.36},  // Ancla 3 (índice 2) - Noreste
-  { 6.35, 0.0},   // Ancla 4 (índice 3) - Este (posición corregida)
+  { 6.35, 0.0},   // Ancla 4 (índice 3) - Este 
   { 0.0, -1.8}    // Ancla 5 (índice 4) - Sur centro
 };
 
 // ===== FUNCIONES HELPER =====
 int getAnchorIndex(int anchor_id) {
-  // Mapear ID de ancla (1,2,3,4,5) a índice de array (0,1,2,3,4)
-  // Simplificado: índice = ID - 1
   if (anchor_id >= 1 && anchor_id <= 5) {
     return anchor_id - 1;
   }
-  return -1; // No encontrado
+  return -1; 
 }
 
 int getAnchorNumber(int array_index) {
-  // Convertir índice de array (0,1,2,3,4) a número de ancla (1,2,3,4,5)
-  // Simplificado: ID = índice + 1
   return array_index + 1;
 }
 
-// ===== TRILATERACIÓN INTELIGENTE OPCIÓN A =====
+// ===== TRILATERACIÓN INTELIGENTE =====
 bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
   if (count < 3) return false;
   
-  // === PASO 1: Verificar si mantener combinación anterior ===
   bool can_keep_previous = false;
   if (combination_stable && (millis() - last_trilateration_time) < 2000) {
     bool all_available = true;
@@ -324,9 +314,9 @@ bool calculateTrilateration(int a0, int a1, int a2, float* result_x, float* resu
   float x2 = anchorsPos[a1][0], y2 = anchorsPos[a1][1]; 
   float x3 = anchorsPos[a2][0], y3 = anchorsPos[a2][1];
   
-  float r1 = anchor_distance[a0]; // Ya en metros
-  float r2 = anchor_distance[a1]; // Ya en metros
-  float r3 = anchor_distance[a2]; // Ya en metros
+  float r1 = anchor_distance[a0]; 
+  float r2 = anchor_distance[a1]; 
+  float r3 = anchor_distance[a2]; 
   
   float A = 2 * (x2 - x1);
   float B = 2 * (y2 - y1);
@@ -344,7 +334,7 @@ bool calculateTrilateration(int a0, int a1, int a2, float* result_x, float* resu
 }
 
 // Estructura para definir zonas de interés
-#define NUM_ZONES 3  // Zonas para salón indoor
+#define NUM_ZONES 5 
 struct Zone {
   float x;
   float y;
@@ -355,20 +345,22 @@ struct Zone {
   bool stayTimeReached;
 };
 
-// Definición de zonas (INDOOR - Salón 3.45x5.40m)
 Zone zones[NUM_ZONES] = {
-  {0.8, 3.8, 0.7, false, 0, 750, false},   // Zona_Sofa
-  {2.8, 1.5, 0.8, false, 0, 500, false},   // Zona_TV  
-  {1.7, 2.5, 1.0, false, 0, 1000, false}   // Zona_Centro
+   //   x ,   y ,  r , inZone,lastEntry,minStay,flag
+   {  0.0,  9.0, 1.5, false, 0, 750,  false},   // Zona Norte
+   {  0.0, -2.0, 1.5, false, 0, 750,  false},   // Zona Sur
+   {  5.5,  4.0, 1.5, false, 0, 500,  false},   // Zona Este
+   { -5.5,  4.0, 1.5, false, 0, 500,  false},   // Zona Oeste
+   {  0.0,  4.0, 2.0, false, 0, 1000, false}    // Zona Central
 };
 
-// Variables para MQTT y Estado OPTIMIZADAS
+// Variables para MQTT y Estado 
 unsigned long lastMqttReconnectAttempt = 0;
 unsigned long lastStatusUpdate = 0;
-const long statusUpdateInterval = 80; // OPTIMIZADO: Sincronizado con TDMA (80ms = 12.5 Hz estable)
-String last_anchor_id = "N/A"; // Variable para almacenar el ID del último ancla vista
+const long statusUpdateInterval = 80; 
+String last_anchor_id = "N/A"; 
 
-// ===== SISTEMA DE BUFFERING ESTABILIZADO =====
+// ===== SISTEMA DE BUFFERING =====
 struct StabilizedBuffer {
   float position_x_buffer[8];
   float position_y_buffer[8];
@@ -376,7 +368,7 @@ struct StabilizedBuffer {
   int buffer_head = 0;
   int buffer_count = 0;
   unsigned long last_output_time = 0;
-  const unsigned long OUTPUT_INTERVAL = 80; // Salida fija cada 80ms (12.5 Hz estable)
+  const unsigned long OUTPUT_INTERVAL = 80; 
 } stable_buffer;
 
 // ===== VARIABLES DE CONTROL DE FLUJO MQTT =====
@@ -389,7 +381,7 @@ struct MQTTFlowControl {
   const int MAX_CONSECUTIVE_FAILURES = 3;
 } mqtt_flow;
 
-// HTML para la página web integrada (versión simplificada)
+// HTML para la página web integrada 
 const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -403,10 +395,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     h1 { color: #333; }
     .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .anchor { display: flex; justify-content: space-between; margin-bottom: 10px; }
-    .battery { display: flex; align-items: center; margin-bottom: 20px; }
-    .battery-icon { width: 30px; height: 15px; border: 2px solid #333; border-radius: 3px; position: relative; margin-right: 10px; }
-    .battery-icon:after { content: ''; width: 3px; height: 8px; background: #333; position: absolute; right: -5px; top: 3px; border-radius: 0 2px 2px 0; }
-    .battery-level { height: 100%; background: #4CAF50; border-radius: 1px; }
+    /* Se eliminan estilos de batería */
     button { background: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
     .status { color: #666; font-style: italic; }
     #visualization { height: 400px; width: 100%; max-width: 600px; position: relative; border: 1px solid #ccc; background: #fafafa; margin: 0 auto; }
@@ -433,16 +422,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <body>
   <div class="container">
     <h1>Monitor de Tag UWB</h1>
-    
-    <div class="card">
-      <div class="battery">
-        <div class="battery-icon">
-          <div class="battery-level" id="battery-level" style="width: 50%"></div>
-        </div>
-        <span id="battery-percentage">50%</span>
-      </div>
-      <p class="status" id="status">Esperando datos...</p>
-    </div>
     
     <div class="card">
       <h2>Anclajes</h2>
@@ -524,11 +503,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     
     // Actualizar la interfaz con los datos recibidos
     function updateUI(data) {
-      // Actualizar batería
-      const batteryLevel = data.battery;
-      document.getElementById('battery-level').style.width = batteryLevel + '%';
-      document.getElementById('battery-percentage').textContent = batteryLevel + '%';
-
       // Actualizar anclajes data (usaremos window.currentAnchorsData o data.anchors)
       anchors = data.anchors; // Mantenemos esto por si renderVisualization lo usa directamente
 
@@ -580,7 +554,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
     // Cálculo de posición por trilateración
     function calculateTagPosition() {
-        // Configuración del espacio físico INDOOR (rectángulo de 3.45m x 5.40m)
+        // Configuración del espacio físico INDOOR 
         const minX = -6.9;
         const maxX =  6.8;
         const minY = -3.5;
@@ -883,10 +857,6 @@ String getDataJson() {
                        JSON_OBJECT_SIZE(NUM_ANCHORS);
                        
   StaticJsonDocument<capacity> doc;
-
-  // Añadir nivel de batería
-  doc["battery"] = 85;
-  
   // Añadir datos de anclajes
   JsonArray anchorsArray = doc.createNestedArray("anchors");
   for (int i = 0; i < NUM_ANCHORS; i++) {
@@ -926,15 +896,6 @@ void setupWebServer() {
   Serial.println("✓ AsyncWebServer + WebSocket iniciado en :80");
 }
 
-// Envía datos por UDP (broadcasting)
-void broadcastUDP() {
-  if(WiFi.status() == WL_CONNECTED && !USE_AP_MODE) {
-    String udpMessage = "Tag: " + String(TAG_ID) + ", LastAnchor: " + String(last_anchor_id);
-    udp.beginPacket(broadcastIP, UDP_PORT);
-    udp.print(udpMessage); 
-    udp.endPacket();
-  }
-}
 
 // Comprueba si el tag está dentro de alguna zona definida
 void checkZones() {
@@ -1064,7 +1025,7 @@ void publishStatus() {
 
 void broadcastWebSocket(){
   static uint32_t lastWs=0;
-  if(millis()-lastWs<16) return; // 60 fps máx (16 ms) - máxima fluidez
+  if(millis()-lastWs<16) return; 
   String json=getDataJson();
   ws.textAll(json);
   lastWs=millis();
@@ -1363,19 +1324,16 @@ void loop() {
                 ranging_time = DW3000.ds_processRTInfo(t_roundA, t_replyA, DW3000.read(0x12, 0x04), DW3000.read(0x12, 0x08), clock_offset);
                 distance = DW3000.convertToCM(ranging_time);
                 
-                // === CONVERSIÓN A METROS DIRECTAMENTE ===
-                float distance_meters = distance / 100.0; // Convertir cm a metros una sola vez
+                float distance_meters = distance / 100.0; 
                 
-                // Leer la potencia de la señal recibida y almacenarla
                 pot_sig[ii] = DW3000.getSignalStrength();
 
                 anchor_responded[ii] = true; 
                 if (distance_meters > 0) { 
-                    anchor_distance[ii] = kalmanFilterDistance(distance_meters, ii); // Ya en metros
+                    anchor_distance[ii] = kalmanFilterDistance(distance_meters, ii); 
                 } else {
                     anchor_distance[ii] = 0; 
-                    // Si la distancia es inválida, también deberíamos considerar la señal como mala para WLS
-                    // pot_sig[ii] = -120.0f; // Opcional: si distancia es 0, forzar mala señal para WLS
+                    pot_sig[ii] = -120.0f; 
                 }
  
                 // Formatear logs: TODO EN METROS para consistencia completa del sistema
@@ -1393,8 +1351,7 @@ void loop() {
                        Serial.println("MQTT Publish Failed (single log line)"); 
                     }
                 } else {
-                    // Optional: Indicate MQTT isn't connected when trying to send log
-                    // Serial.println("MQTT disconnected, cannot send log line."); 
+                    Serial.println("MQTT disconnected, cannot send log line."); 
                 }
                 // ----------------------------------------------
  
@@ -1424,7 +1381,7 @@ void loop() {
 
         // Only trilaterate if enough anchors responded
         if (responding_anchors >= 3) { 
-          // Calcular posición del tag usando trilateración inteligente (INDOOR)
+          // Calcular posición del tag usando trilateración inteligente 
           
           float distances[NUM_ANCHORS];
           for (int i = 0; i < NUM_ANCHORS; i++) {
@@ -1538,24 +1495,19 @@ void loop() {
           Serial.print("Anclaje ");
           Serial.print(ID_PONG[i]);
           Serial.print(" ");
-          Serial.print(anchor_distance[i], 3); // Mostrar metros con 3 decimales
+          Serial.print(anchor_distance[i], 3); 
           Serial.print(" m, Potencia = ");
           Serial.print(pot_sig[i]);
           Serial.println("dBm");
         }
         
-        // broadcastUDP();
-        
-        // MQTT con buffering estabilizado - llamar SIEMPRE, el control está dentro de publishStatus()
         publishStatus();
         
-        // Enviar datos por WebSocket de forma continua para la interfaz (≈25-50 fps)
         broadcastWebSocket();
 
         fin_de_com = 0;
     }
-  } // <<< ADDED: Closing brace for if (currentMillis - lastUpdate >= updateInterval)
+  } 
 
-    // === Difusión WebSocket cada actualización incluso fuera de mi slot ===
-    broadcastWebSocket();
-} // Closing brace for loop()
+  broadcastWebSocket();
+} 
