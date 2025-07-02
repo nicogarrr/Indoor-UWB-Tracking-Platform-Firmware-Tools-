@@ -290,7 +290,7 @@ class UWBHexagonReplaySystem:
         
         # Configuración avanzada
         self.use_kalman_filter = True
-        self.use_ml_prediction = True
+        self.use_ml_prediction = False  # Desactivado por defecto - overhead innecesario para datos de calidad actual
         self.optimize_memory = optimize_memory
         self.skip_trail = skip_trail
         self.verbose_debug = verbose_debug
@@ -740,11 +740,11 @@ class UWBHexagonReplaySystem:
     def draw_hexagon_anchors(self):
         """Dibujar anclas UWB en la disposición indoor"""
         anchors = {
-            'A10': (-6.0, 0.0, 'blue'),
-            'A20': (-1.6, 10.36, 'blue'),
-            'A30': (2.1, 10.36, 'blue'),
-            'A40': (6.35, 0.0, 'blue'),
-            'A50': (0.0, -1.8, 'blue')
+            'A1': (-6.0, 0.0, 'blue'),
+            'A2': (-2.6, 7.92, 'blue'),  
+            'A3': (2.1, 10.36, 'blue'),
+            'A4': (6.35, 0.0, 'blue'),
+            'A5': (0.0, -1.8, 'blue')
         }
 
         for anchor_id, (x, y, color) in anchors.items():
@@ -805,11 +805,12 @@ class UWBHexagonReplaySystem:
             print(" Modo optimización memoria: trayectoria completa simplificada")
         
         # === INDICADORES DE VELOCIDAD ===
-        # Círculo de velocidad (radio proporcional)
-        self.speed_indicator = patches.Circle((0, 0), 0, linewidth=3,
-                                            edgecolor='cyan', facecolor='cyan',
-                                            alpha=0.3, zorder=12)
-        self.ax.add_patch(self.speed_indicator)
+        # Círculo de velocidad (DESACTIVADO para máxima fluidez)
+        self.speed_indicator = None  # Desactivado por rendimiento
+        # self.speed_indicator = patches.Circle((0, 0), 0, linewidth=3,
+        #                                     edgecolor='cyan', facecolor='cyan',
+        #                                     alpha=0.3, zorder=12)
+        # self.ax.add_patch(self.speed_indicator)
         
         # === ZONA ACTUAL ===
         # Posicionado muy abajo para evitar solapamiento total
@@ -965,10 +966,11 @@ class UWBHexagonReplaySystem:
         # === CALCULAR VELOCIDAD Y DIRECCIÓN ===
         speed = self.calculate_speed(frame_idx)
         
-        # Indicador visual de velocidad (círculo proporcional)
-        speed_radius = min(3.0, speed * 0.4)  # Radio máximo 3m
-        self.speed_indicator.center = (x, y)
-        self.speed_indicator.radius = speed_radius
+        # Indicador visual de velocidad (DESACTIVADO para máxima fluidez)
+        # speed_radius = min(3.0, speed * 0.4)  # Radio máximo 3m
+        # if self.speed_indicator:
+        #     self.speed_indicator.center = (x, y)
+        #     self.speed_indicator.radius = speed_radius
         
         # === ZONA ACTUAL ===
         zone = self.get_player_zone(x, y)
