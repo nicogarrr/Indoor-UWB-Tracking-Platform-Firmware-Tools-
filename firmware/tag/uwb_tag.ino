@@ -119,7 +119,7 @@ float validation_threshold = 1.0; // metros - error máximo permitido
 // ===== POSICIONES DE ANCLAS GLOBALES (anclas 1-5) =====
 const float anchorsPos[NUM_ANCHORS][2] = {
   {-6.0,  0.0},   // Ancla 1 (índice 0) - Oeste
-  {-1.6, 10.36},  // Ancla 2 (índice 1) - Noroeste  
+  {-2.6,  7.92},  // Ancla 2 (índice 1) - Noroeste OPTIMIZADA v2
   { 2.1, 10.36},  // Ancla 3 (índice 2) - Noreste
   { 6.35, 0.0},   // Ancla 4 (índice 3) - Este (posición corregida)
   { 0.0, -1.8}    // Ancla 5 (índice 4) - Sur centro
