@@ -1,27 +1,27 @@
 #include "DW3000.h"
 
-// ===== CONFIGURACIÓN DE ANCHOR =====
-static int ID_PONG = 4; // ID único del anchor
+// ===== CONFIGURATION OF ANCHOR =====
+static int ID_PONG = 4; // Unique ID of the anchor
 
-// ===== VARIABLES DE COMUNICACIÓN =====
+// ===== COMMUNICATION VARIABLES =====
 static int frame_buffer = 0;
 static int rx_status;
 static int tx_status;
 
-// Estados del protocolo double-sided ranging
+// States of the double-sided ranging protocol
 static int curr_stage = 0;
 static int t_roundB = 0;
 static int t_replyB = 0;
 static long long rx = 0;
 static long long tx = 0;
 
-// ===== GESTIÓN MEJORADA DE ACTIVIDAD =====
+// ===== IMPROVED ACTIVITY MANAGEMENT =====
 unsigned long lastSuccessfulActivityTime = 0;
 unsigned long lastDebugOutput = 0;
-const unsigned long ANCHOR_RESET_TIMEOUT_MS = 30000; // 30 segundos
-const unsigned long DEBUG_INTERVAL_MS = 10000; // Debug cada 10 segundos
+const unsigned long ANCHOR_RESET_TIMEOUT_MS = 30000; // 30 seconds
+const unsigned long DEBUG_INTERVAL_MS = 10000; // Debug every 10 seconds
 
-// ===== ESTADÍSTICAS DE RENDIMIENTO =====
+// ===== PERFORMANCE STATISTICS =====
 struct AnchorStats {
   unsigned long total_requests = 0;
   unsigned long successful_responses = 0;
@@ -30,20 +30,20 @@ struct AnchorStats {
   unsigned long uptime_start = 0;
 } stats;
 
-// ===== CONFIGURACIONES OPTIMIZADAS =====
-const unsigned long RX_TIMEOUT_MS = 100; // Timeout para recepción
-const unsigned long RESPONSE_DELAY_US = 50; // Delay mínimo entre respuestas
+// ===== OPTIMIZED CONFIGURATIONS =====
+const unsigned long RX_TIMEOUT_MS = 100; // Timeout for reception
+const unsigned long RESPONSE_DELAY_US = 50; // Minimum delay between responses
 
 void setup() {
-  Serial.begin(115200); // Velocidad estándar para estabilidad
+  Serial.begin(115200); // Standard speed for stability
   
-  // Inicializar estadísticas
+  // Initialize statistics
   stats.uptime_start = millis();
   
   initializeDW3000();
   
-  Serial.println("> ANCLA 4 OPTIMIZADA - Double-sided PONG v2.0 <");
-  Serial.println("[INFO] Setup completado. Listo para ranging.");
+  Serial.println("> ANCHOR 4 OPTIMIZED - Double-sided PONG v2.0 <");
+  Serial.println("[INFO] Setup completed. Ready for ranging.");
   
   lastSuccessfulActivityTime = millis();
   lastDebugOutput = millis();
@@ -52,9 +52,9 @@ void setup() {
 void initializeDW3000() {
   DW3000.begin();
   DW3000.hardReset();
-  delay(100); // Reducido para arranque más rápido
+  delay(100); // Reduced for faster startup
   
-  // Verificación con reintentos
+  // Verification with retries
   int retries = 0;
   while (!DW3000.checkForIDLE() && retries < 5) {
     Serial.printf("[WARNING] IDLE check failed, retry %d/5\n", ++retries);
@@ -80,20 +80,20 @@ void initializeDW3000() {
   DW3000.clearSystemStatus();
   DW3000.standardRX();
   
-  Serial.println("[INFO] DW3000 inicializado correctamente");
+  Serial.println("[INFO] DW3000 initialized correctly");
 }
 
 void loop() {
-  // Gestión de actividad y auto-reinicio mejorado
+  // Improved activity management and auto-restart
   manageActivity();
   
-  // Debug periódico mejorado
+  // Improved periodic debug
   if (millis() - lastDebugOutput > DEBUG_INTERVAL_MS) {
     printPerformanceStats();
     lastDebugOutput = millis();
   }
   
-  // Máquina de estados principal
+  // Main state machine
   switch (curr_stage) {
     case 0:
       handleStage0_AwaitRanging();
@@ -124,9 +124,9 @@ void loop() {
 void manageActivity() {
   unsigned long currentTime = millis();
   
-  // Auto-reinicio por inactividad
+  // Auto-restart by inactivity
   if (currentTime - lastSuccessfulActivityTime > ANCHOR_RESET_TIMEOUT_MS) {
-    Serial.println("[AUTO-RESET] Inactividad detectada. Reiniciando ancla...");
+    Serial.println("[AUTO-RESET] Inactivity detected. Restarting anchor...");
     printPerformanceStats();
     delay(100);
     ESP.restart();
@@ -143,31 +143,31 @@ void handleStage0_AwaitRanging() {
     
     if (rx_status == 1) {
       if (DW3000.ds_isErrorFrame()) {
-        Serial.println("[WARNING] Error frame detectado, volviendo a stage 0");
+        Serial.println("[WARNING] Error frame detected, returning to stage 0");
         stats.error_frames++;
         resetToStage0();
         return;
       }
       
       if (DW3000.getDestinationID() != ID_PONG) {
-        // No es para esta ancla, seguir escuchando
+        // Not
         DW3000.standardRX();
         return;
       }
       
       if (DW3000.ds_getStage() != 1) {
-        Serial.printf("[WARNING] Stage incorrecto recibido: %d\n", DW3000.ds_getStage());
+        Serial.printf("[WARNING] Incorrect stage received: %d\n", DW3000.ds_getStage());
         DW3000.ds_sendErrorFrame();
         stats.error_frames++;
         resetToStage0();
         return;
       }
       
-      // Todo correcto, avanzar a stage 1
+      // Everything is correct, advance to stage 1
       curr_stage = 1;
       
     } else {
-      Serial.println("[ERROR] Error de recepción en stage 0");
+      Serial.println("[ERROR] Error in stage 0");
       stats.timeouts++;
       DW3000.clearSystemStatus();
       resetToStage0();
@@ -192,20 +192,20 @@ void handleStage2_AwaitSecondResponse() {
     
     if (rx_status == 1) {
       if (DW3000.ds_isErrorFrame()) {
-        Serial.println("[WARNING] Error frame en stage 2");
+        Serial.println("[WARNING] Error frame in stage 2");
         stats.error_frames++;
         resetToStage0();
         return;
       }
       
       if (DW3000.getDestinationID() != ID_PONG) {
-        Serial.println("[DEBUG] Destino diferente en stage 2, limpiando");
-        curr_stage = 4; // Limpiar y volver a stage 0
+        Serial.println("[DEBUG] Destination different in stage 2, cleaning");
+        curr_stage = 4; // Clean and return to stage 0
         return;
       }
       
       if (DW3000.ds_getStage() != 3) {
-        Serial.printf("[WARNING] Stage incorrecto en stage 2: %d\n", DW3000.ds_getStage());
+        Serial.printf("[WARNING] Incorrect stage in stage 2: %d\n", DW3000.ds_getStage());
         DW3000.ds_sendErrorFrame();
         stats.error_frames++;
         resetToStage0();
@@ -215,7 +215,7 @@ void handleStage2_AwaitSecondResponse() {
       curr_stage = 3;
       
     } else {
-      Serial.println("[ERROR] Error de recepción en stage 2");
+      Serial.println("[ERROR] Error in stage 2");
       stats.timeouts++;
       resetToStage0();
     }
@@ -226,10 +226,10 @@ void handleStage3_SendInfo() {
   rx = DW3000.readRXTimestamp();
   t_roundB = rx - tx;
   
-  // Enviar información de timing
+  // Send timing information
   DW3000.ds_sendRTInfo(t_roundB, t_replyB);
   
-  // Transacción completada exitosamente
+  // Transaction completed successfully
   stats.successful_responses++;
   lastSuccessfulActivityTime = millis();
   
@@ -237,12 +237,12 @@ void handleStage3_SendInfo() {
 }
 
 void handleStage4_Cleanup() {
-  // Limpieza rápida y vuelta a stage 0
+  // Quick cleanup and return to stage 0
   resetToStage0();
 }
 
 void handleUnknownStage() {
-  Serial.printf("[ERROR] Stage desconocido (%d), reiniciando\n", curr_stage);
+  Serial.printf("[ERROR] Unknown stage (%d), restarting\n", curr_stage);
   resetToStage0();
 }
 
@@ -250,7 +250,7 @@ void resetToStage0() {
   curr_stage = 0;
   DW3000.standardRX();
   
-  // Pequeño delay para estabilizar
+  // Small delay to stabilize
   delayMicroseconds(RESPONSE_DELAY_US);
 }
 
@@ -259,13 +259,10 @@ void printPerformanceStats() {
   float success_rate = stats.total_requests > 0 ? 
     (float)stats.successful_responses / stats.total_requests * 100.0 : 0.0;
   
-  Serial.println("\n=== ESTADÍSTICAS ANCLA 4 ===");
-  Serial.printf("Uptime: %lu ms (%.1f min)\n", uptime, uptime / 60000.0);
-  Serial.printf("Solicitudes totales: %lu\n", stats.total_requests);
-  Serial.printf("Respuestas exitosas: %lu\n", stats.successful_responses);
-  Serial.printf("Tasa de éxito: %.1f%%\n", success_rate);
-  Serial.printf("Frames con error: %lu\n", stats.error_frames);
+  Serial.println("\n=== ANCHOR 4 STATISTICS ===");
+  Serial.printf("Success rate: %.1f%%\n", success_rate);
+  Serial.printf("Frames with error: %lu\n", stats.error_frames);
   Serial.printf("Timeouts: %lu\n", stats.timeouts);
-  Serial.printf("Última actividad: %lu ms ago\n", millis() - lastSuccessfulActivityTime);
+  Serial.printf("Last activity: %lu ms ago\n", millis() - lastSuccessfulActivityTime);
   Serial.println("================================\n");
 } 

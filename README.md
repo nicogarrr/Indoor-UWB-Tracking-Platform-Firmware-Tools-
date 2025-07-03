@@ -1,29 +1,29 @@
-Sistema de Localización Indoor UWB para Fútbol Sala
-====================================================
+UWB Indoor Localization System for Futsal
+==========================================
 
-Introducción
+Introduction
 ------------
-Este proyecto implementa un sistema de localización indoor de alta precisión basado en tecnología **Ultra-Wideband (UWB)** con el chip DW3000 y placas **ESP32**. Está orientado a la captura y análisis de movimiento en fútbol sala, aunque puede adaptarse a otros deportes o entornos interiores.
+This project implements a high-precision indoor localization system based on **Ultra-Wideband (UWB)** technology with the DW3000 chip and **ESP32** boards. It is oriented towards capturing and analyzing movement in futsal, although it can be adapted to other sports or indoor environments.
 
-El sistema consta de los siguientes componentes principales:
+The system consists of the following main components:
 
-1. **Firmware para anclas UWB** (5 archivos `*.ino`).  
-2. **Firmware para el tag UWB** (`uwb_tag.ino`).  
-3. **Colector de datos MQTT** en Python (`mqtt/uwb_data_collector.py`).  
-4. **Sistema de reproducción y análisis** en Python (`replay/movement_replay.py`).  
-5. **Conjunto de datos de ejemplo** en formato CSV (directorio `uwb_data/`).
+1. **UWB anchor firmware** (5 `*.ino` files).  
+2. **UWB tag firmware** (`uwb_tag.ino`).  
+3. **MQTT data collector** in Python (`mqtt/uwb_data_collector.py`).  
+4. **Replay and analysis system** in Python (`replay/movement_replay.py`).  
+5. **Sample dataset** in CSV format (`uwb_data/` directory).
 
-Características técnicas destacadas
-----------------------------------
-* Posicionamiento con 5 anclas DW3000 y un tag móvil.  
-* Protocolo TDMA para evitar colisiones y maximizar la frecuencia de actualización.  
-* Firmware optimizado para el microcontrolador ESP32 (modo dual-core).  
-* Publicación de datos en tiempo real mediante MQTT.  
-* Almacenamiento de mediciones y posiciones en CSV.  
-* Reproductor interactivo con filtro de Kalman y predicción mediante Gaussian Process Regression.
+Key Technical Features
+---------------------
+* Positioning with 5 DW3000 anchors and one mobile tag.  
+* TDMA protocol to avoid collisions and maximize update frequency.  
+* Firmware optimized for ESP32 microcontroller (dual-core mode).  
+* Real-time data publishing via MQTT.  
+* Storage of measurements and positions in CSV format.  
+* Interactive player with Kalman filter and prediction using Gaussian Process Regression.
 
-Estructura del repositorio
--------------------------
+Repository Structure
+-------------------
 ```
 TFG OFICIAL/
 ├── firmware/
@@ -39,69 +39,69 @@ TFG OFICIAL/
 │   └── uwb_data_collector.py
 ├── replay/
 │   └── movement_replay.py
-├── uwb_data/               # Datos experimentales (CSV)
-├── requirements.txt        # Dependencias Python
-└── pyproject.toml          # Configuración de herramientas de desarrollo
+├── uwb_data/               # Experimental data (CSV)
+├── requirements.txt        # Python dependencies
+└── pyproject.toml          # Development tool configuration
 ```
 
-Requisitos de hardware
-----------------------
-* 6 placas **Makerfabs ESP32 UWB DW3000** (5 anclas + 1 tag).  
-* Router Wi-Fi 2.4 GHz para la transmisión MQTT.  
-* Equipo con Python 3.8 o superior para el análisis de datos.  
-* Fuente de alimentación estable de 5 V para las anclas.
+Hardware Requirements
+--------------------
+* 6 **Makerfabs ESP32 UWB DW3000** boards (5 anchors + 1 tag).  
+* 2.4 GHz Wi-Fi router for MQTT transmission.  
+* Computer with Python 3.8 or higher for data analysis.  
+* Stable 5V power supply for anchors.
 
-Instalación del entorno Python
-------------------------------
+Python Environment Setup
+------------------------
 ```bash
-# Clonar el repositorio (ejemplo)
-git clone https://github.com/usuario/TFG-UWB.git
+# Clone repository (example)
+git clone https://github.com/user/TFG-UWB.git
 cd "TFG OFICIAL"
 
-# Crear entorno virtual (opcional)
+# Create virtual environment (optional)
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# Instalar dependencias
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-Programación del firmware
--------------------------
-1. Instalar Arduino IDE 2.x y añadir el paquete de placas **ESP32**.  
-2. Seleccionar la placa **ESP32 WROVER Module** con PSRAM habilitada.  
-3. Compilar y cargar los siguientes firmwares:
-   * `firmware/anchors/anchor_X.ino` (cambiar `X` por 1-5 según la ancla).  
-   * `firmware/tag/uwb_tag.ino` para el tag móvil.
-4. Configurar en cada archivo los parámetros de red Wi-Fi y, si es necesario, el identificador de ancla (`ID_PONG`).
+Firmware Programming
+--------------------
+1. Install Arduino IDE 2.x and add the **ESP32** board package.  
+2. Select **ESP32 WROVER Module** board with PSRAM enabled.  
+3. Compile and upload the following firmware:
+   * `firmware/anchors/anchor_X.ino` (change `X` to 1-5 according to anchor).  
+   * `firmware/tag/uwb_tag.ino` for the mobile tag.
+4. Configure Wi-Fi network parameters in each file and, if necessary, the anchor identifier (`ID_PONG`).
 
-Uso del sistema
----------------
-1. Colocar las anclas alrededor de la pista según la geometría diseñada.  
-2. Iniciar el script de captura:
+System Usage
+------------
+1. Place anchors around the court according to the designed geometry.  
+2. Start the capture script:
    ```bash
    python mqtt/uwb_data_collector.py
    ```
-   Se generarán archivos CSV en la carpeta `uwb_data/`.
-3. Después de la sesión, reproducir los datos con:
+   CSV files will be generated in the `uwb_data/` folder.
+3. After the session, replay the data with:
    ```bash
-   python replay/movement_replay.py --file ruta/al/archivo.csv
+   python replay/movement_replay.py --file path/to/file.csv
    ```
-   El reproductor permite pausar, ajustar la velocidad y aplicar filtros en tiempo real.
+   The player allows pausing, adjusting speed, and applying filters in real time.
 
-Formato de datos
-----------------
+Data Format
+-----------
 * Ranging: `uwb_ranging_YYYYMMDD_HHMMSS.csv`  
-  * Columnas: `Tag_ID,Timestamp_ms,Anchor_ID,Raw_Distance_m,Filtered_Distance_m,Signal_Power_dBm,Anchor_Status`
-* Posiciones: `uwb_positions_YYYYMMDD_HHMMSS.csv`  
-  * Columnas: `timestamp,tag_id,x,y,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist`
+  * Columns: `Tag_ID,Timestamp_ms,Anchor_ID,Raw_Distance_m,Filtered_Distance_m,Signal_Power_dBm,Anchor_Status`
+* Positions: `uwb_positions_YYYYMMDD_HHMMSS.csv`  
+  * Columns: `timestamp,tag_id,x,y,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist`
 
-Licencia
---------
-Este proyecto se distribuye con fines académicos para el Trabajo de Fin de Grado en la Universidad de Oviedo. El uso comercial está prohibido sin autorización expresa del autor.
+License
+-------
+This project is distributed for academic purposes for the Final Degree Project at the University of Oviedo. Commercial use is prohibited without express authorization from the author.
 
-Contacto
---------
-Autor: Nicolás Iglesias García  
-Correo: uo288336@uniovi.es
-Escuela Politécnica de Ingeniería de Gijón, Universidad de Oviedo
+Contact
+-------
+Author: Nicolás Iglesias García  
+Email: nico.iglesias@example.com  
+Polytechnic School of Engineering of Gijón, University of Oviedo

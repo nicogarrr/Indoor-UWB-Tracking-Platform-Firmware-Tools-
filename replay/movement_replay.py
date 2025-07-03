@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Sistema de Replay UWB para Análisis de Localización Indoor
-Reproductor interactivo de datos de movimiento con filtros avanzados
+UWB Replay System for Indoor Localization Analysis
+Interactive player for movement data with advanced filters
 """
 
 import pandas as pd
@@ -21,8 +21,8 @@ import warnings
 
 class KalmanPositionFilter:
     """
-    Implementación del Filtro de Kalman para sistemas UWB indoor.
-    Reduce el ruido de medición y mejora la precisión de posicionamiento.
+    Implementation of the Kalman Filter for UWB indoor systems.
+    Reduces measurement noise and improves positioning accuracy.
     """
     def __init__(self, initial_pos=None, process_noise=0.002, measurement_noise=0.2):
         self.state = np.zeros(4)  # [x, y, vx, vy]
@@ -46,7 +46,7 @@ class KalmanPositionFilter:
         self.initialized = False
         
     def predict(self, dt):
-        """Predice el siguiente estado basado en el modelo de movimiento."""
+        """Predict the next state based on the movement model."""
         self.F[0, 2] = dt
         self.F[1, 3] = dt
         
@@ -54,10 +54,10 @@ class KalmanPositionFilter:
         self.P = self.F @ self.P @ self.F.T + self.Q
         
     def update(self, measurement):
-        """Actualiza el estado con una nueva medición."""
+        """Update the state with a new measurement."""
         y = measurement - self.H @ self.state
         
-        # Detección de outliers en la innovación
+        # Detection of outliers in the innovation
         innovation_magnitude = np.linalg.norm(y)
         max_innovation = 3.0
         
@@ -67,22 +67,22 @@ class KalmanPositionFilter:
         else:
             R_adaptive = self.R
         
-        # Covarianza de la innovación
+        # Covariance of the innovation
         S = self.H @ self.P @ self.H.T + R_adaptive
         
-        # Ganancia de Kalman
+        # Kalman gain
         K = self.P @ self.H.T @ np.linalg.inv(S)
         
-        # Actualizar estado
+        # Update state
         self.state = self.state + K @ y
         
-        # Actualizar covarianza
+        # Update covariance
         I = np.eye(4)
         self.P = (I - K @ self.H) @ self.P
         
     def process(self, position, dt=0.02):
-        """Procesa una nueva posición, devolviendo la posición filtrada."""
-        # Si la posición es NaN, solo predecir sin actualizar
+        """Process a new position, returning the filtered position."""
+        # If the position is NaN, only predict without updating
         if np.isnan(position[0]) or np.isnan(position[1]):
             if self.initialized:
                 self.predict(dt)
@@ -91,24 +91,24 @@ class KalmanPositionFilter:
                 return position
         
         if not self.initialized:
-            # Primera medición válida: inicializar
+            # First valid measurement: initialize
             self.state[:2] = position
             self.initialized = True
             return position
         
-        # Realizar predicción
+        # Perform prediction
         self.predict(dt)
         
-        # Actualizar con medición
+        # Update with measurement
         self.update(position)
         
-        # Devolver posición filtrada
+        # Return filtered position
         return self.state[:2]
 
 class TrajectoryPredictor:
     """
-    Predicción de trayectorias usando Gaussian Process Regression (GPR)
-    para movimientos indoor.
+    Prediction of trajectories using Gaussian Process Regression (GPR)
+    for indoor movements.
     """
     def __init__(self, context="indoor"):
         self.context = context
@@ -129,7 +129,7 @@ class TrajectoryPredictor:
                        WhiteKernel(noise_level=0.01, noise_level_bounds=noise_level_bounds)
     
     def train(self, timestamps, positions):
-        """Entrena los modelos GPR usando datos históricos."""
+        """Train the GPR models using historical data."""
         if len(timestamps) < self.min_samples_required:
             self.is_trained = False
             return False
@@ -182,14 +182,14 @@ class TrajectoryPredictor:
     
     def predict(self, target_timestamps, max_speed=7.0):
         """
-        Predice posiciones para timestamps objetivo usando GPR entrenado.
+        Predict positions for target timestamps using trained GPR.
         
         Args:
-            target_timestamps: Lista de timestamps objetivo en millisegundos
-            max_speed: Velocidad máxima permitida en m/s (default: 7.0 m/s para movimiento indoor)
+            target_timestamps: List of target timestamps in milliseconds
+            max_speed: Maximum allowed speed in m/s (default: 7.0 m/s for indoor movement)
             
         Returns:
-            List[[x, y]]: Lista de posiciones predichas, o None/[] si error
+            List[[x, y]]: List of predicted positions, or None/[] if error
         """
         if not self.is_trained or self.x_model is None or self.y_model is None:
             return None
@@ -197,25 +197,25 @@ class TrajectoryPredictor:
         if len(target_timestamps) == 0:
             return []
         
-        # Normalizar timestamps objetivo
+        # Normalize target timestamps
         ts_range = self.max_ts - self.min_ts
         
-        # Validación adicional: evitar división por cero si solo hay un timestamp
+        # Additional validation: avoid division by zero if there is only one timestamp
         if ts_range == 0:
             return []
         
         norm_ts = (np.array(target_timestamps) - self.min_ts) / ts_range
         norm_ts = norm_ts.reshape(-1, 1)
         
-        # Predicción con GPR
+        # Prediction with GPR
         pred_x, _ = self.x_model.predict(norm_ts, return_std=True)
         pred_y, _ = self.y_model.predict(norm_ts, return_std=True)
         
-        # Asegurar que las predicciones sean arrays
+        # Ensure predictions are arrays
         pred_x = np.array(pred_x).flatten()
         pred_y = np.array(pred_y).flatten()
         
-        # Aplicar restricciones de velocidad
+        # Apply speed restrictions
         predictions = []
         last_pos = None
         last_ts = None
@@ -224,9 +224,9 @@ class TrajectoryPredictor:
             pos = [float(pred_x[i]), float(pred_y[i])]
             ts = target_timestamps[i]
             
-            # Limitar velocidad entre puntos consecutivos
+            # Limit speed between consecutive points
             if last_pos is not None and last_ts is not None:
-                dt = (ts - last_ts) / 1000.0  # segundos
+                dt = (ts - last_ts) / 1000.0  # seconds
                 if dt > 0:
                     dx = pos[0] - last_pos[0]
                     dy = pos[1] - last_pos[1]
@@ -247,29 +247,29 @@ class TrajectoryPredictor:
 class UWBHexagonReplaySystem:
     def __init__(self, csv_file, optimize_memory=False, skip_trail=False, verbose_debug=False):
         """
-        Inicializar el sistema de replay avanzado
+        Initialize the advanced replay system
         
         Args:
-            csv_file: Archivo CSV con datos de movimiento
-            optimize_memory: Flag para optimizar memoria en datasets grandes (>1M filas)
-            skip_trail: Flag para omitir trayectoria en tiempo real (reduce memoria)
-            verbose_debug: Flag para mostrar todos los logs de debug GPR (puede ser spam)
+            csv_file: CSV file with movement data
+            optimize_memory: Flag to optimize memory in large datasets (>1M rows)
+            skip_trail: Flag to omit real-time trajectory (reduces memory)
+            verbose_debug: Flag to show all GPR debug logs (can be spam)
         """
-        print("Cargando Sistema de Replay UWB...")
+        print("Loading UWB Replay System...")
         
         self.use_kalman_filter = True
         self.use_ml_prediction = False
         self.optimize_memory = optimize_memory
         self.skip_trail = skip_trail
         self.verbose_debug = verbose_debug
-        self.debug_log_counter = 0  # Contador para limitar spam de logs
+        self.debug_log_counter = 0  # Counter to limit spam of logs
         
         if skip_trail:
-            print("Trail simplificado")
+            print("Simplified trail")
         elif optimize_memory:
-            print("Modo optimización de memoria")
+            print("Memory optimization mode")
         else:
-            print("Trayectoria completa habilitada")
+            print("Full trail enabled")
         
         self.trail_length = None
         
@@ -291,19 +291,19 @@ class UWBHexagonReplaySystem:
         self.setup_interactive_controls()
         
     def load_data(self, csv_file):
-        """Cargar y procesar datos CSV con filtros avanzados"""
+        """Load and process CSV data with advanced filters"""
         try:
             file_size_mb = os.path.getsize(csv_file) / (1024 * 1024)
-            print(f"Tamaño del archivo: {file_size_mb:.1f} MB")
+            print(f"File size: {file_size_mb:.1f} MB")
             
             if file_size_mb > 20:
-                print("WARNING: Dataset grande detectado")
+                print("WARNING: Large dataset detected")
                 
                 if not self.optimize_memory and file_size_mb > 50:
-                    print("RECOMENDACION: Activa optimización de memoria")
+                    print("RECOMMENDATION: Activate memory optimization")
             
             if self.optimize_memory:
-                print("Modo optimización de memoria activo")
+                print("Memory optimization mode active")
                 try:
                     self.original_df = pd.read_csv(csv_file)
                     for col in ['x', 'y']:
@@ -319,39 +319,39 @@ class UWBHexagonReplaySystem:
             num_rows = len(self.original_df)
             memory_usage_mb = self.original_df.memory_usage(deep=True).sum() / (1024 * 1024)
             
-            print(f"Registros originales: {num_rows:,}")
-            print(f"Memoria actual DataFrame: {memory_usage_mb:.1f} MB")
+            print(f"Original rows: {num_rows:,}")
+            print(f"Current DataFrame memory: {memory_usage_mb:.1f} MB")
             
             self.original_df['timestamp'] = pd.to_datetime(self.original_df['timestamp'])
             
             required_columns = ['timestamp', 'x', 'y', 'tag_id']
             missing_cols = [col for col in required_columns if col not in self.original_df.columns]
             if missing_cols:
-                raise ValueError(f"Columnas faltantes: {missing_cols}")
+                raise ValueError(f"Missing columns: {missing_cols}")
             
-            print(f"Datos originales cargados: {len(self.original_df)} registros")
+            print(f"Original data loaded: {len(self.original_df)} rows")
             
             self.apply_advanced_filtering()
             
             if self.df is not None and len(self.df) > 0:
-                print(f"Duración: {(self.df['timestamp'].iloc[-1] - self.df['timestamp'].iloc[0]).total_seconds():.1f} segundos")
-                print(f"Rango X: {self.df['x'].min():.1f} - {self.df['x'].max():.1f}m")
-                print(f"Rango Y: {self.df['y'].min():.1f} - {self.df['y'].max():.1f}m")
+                print(f"Duration: {(self.df['timestamp'].iloc[-1] - self.df['timestamp'].iloc[0]).total_seconds():.1f} seconds")
+                print(f"X range: {self.df['x'].min():.1f} - {self.df['x'].max():.1f}m")
+                print(f"Y range: {self.df['y'].min():.1f} - {self.df['y'].max():.1f}m")
             else:
-                print("No se pudieron procesar los datos correctamente")
+                print("Could not process data correctly")
                 sys.exit(1)
                 
         except Exception as e:
-            print(f"Error cargando datos: {e}")
+            print(f"Error loading data: {e}")
             sys.exit(1)
     
     def apply_advanced_filtering(self):
-        """Aplicar filtros avanzados: Kalman + ML + Interpolación"""
+        """Apply advanced filters: Kalman + ML + Interpolation"""
         if self.original_df is None:
-            print("No hay datos originales para procesar")
+            print("No original data to process")
             return
             
-        print("Aplicando filtros avanzados...")
+        print("Applying advanced filters...")
         
         if self.use_kalman_filter:
             first_valid_pos = self.find_first_valid_position()
@@ -365,12 +365,12 @@ class UWBHexagonReplaySystem:
         self.df = self.apply_intelligent_interpolation()
         
         if self.df is not None:
-            print(f"Filtros aplicados: {len(self.df)} frames interpolados")
+            print(f"Filters applied: {len(self.df)} interpolated frames")
         else:
-            print("Error: No se pudieron aplicar los filtros")
+            print("Error: Could not apply filters")
     
     def find_first_valid_position(self):
-        """Encuentra la primera posición válida en los datos"""
+        """Find the first valid position in the data"""
         if self.original_df is None:
             return None
             
@@ -384,21 +384,21 @@ class UWBHexagonReplaySystem:
         if self.original_df is None:
             return None
             
-        # Convertir timestamps a millisegundos para trabajar
+        # Convert timestamps to milliseconds to work
         timestamps_ms = np.array([
             (ts - self.original_df['timestamp'].iloc[0]).total_seconds() * 1000
             for ts in self.original_df['timestamp']
         ], dtype=np.float64)
         
         original_avg_interval = np.mean(np.diff(timestamps_ms))
-        print(f"Intervalo original promedio: {original_avg_interval:.1f}ms")
+        print(f"Original average interval: {original_avg_interval:.1f}ms")
         
         if original_avg_interval > 500:
             fluid_step_ms = 33.33  
-            print("Usando 30fps para datos esparsos")
+            print("Using 30fps for sparse data")
         else:
             fluid_step_ms = 16.67  
-            print("Usando 60fps para datos densos")
+            print("Using 60fps for dense data")
         
         start_ms = 0
         end_ms = timestamps_ms[-1]
@@ -631,18 +631,18 @@ class UWBHexagonReplaySystem:
         return positions_list[-1]
     
     def setup_plot(self):
-        """Configurar la visualización del área hexagonal indoor"""
-        # Crear figura y ejes
+        """Configure the visualization of the indoor hexagonal area"""
+        # Create figure and axes
         self.fig, self.ax = plt.subplots(figsize=(18, 12))
 
-        # Intentar poner título de ventana (puede fallar en algunos backends)
+        # Try to set window title (may fail on some backends)
         try:
             if hasattr(self.fig.canvas, 'manager') and self.fig.canvas.manager is not None:
-                self.fig.canvas.manager.set_window_title('Sistema de Replay UWB - Área Hexagonal')
+                self.fig.canvas.manager.set_window_title('UWB Replay System - Indoor Hexagon Area')
         except Exception:
             pass
         
-        # ======================== ÁREA HEXAGONAL ========================
+        # ======================== HEXAGONAL AREA ========================
         minX, maxX = -6.9, 6.8
         minY, maxY = -3.5, 10.36
         self.ax.set_xlim(minX - 1, maxX + 1)
@@ -653,10 +653,10 @@ class UWBHexagonReplaySystem:
         self.draw_hexagon_area()
         self.draw_hexagon_anchors()
         
-        # Configurar elementos dinámicos
+        # Configure dynamic elements
         self.setup_dynamic_elements()
         
-        # Panel de información
+        # Information panel
         self.setup_info_panel()
 
 
@@ -664,7 +664,7 @@ class UWBHexagonReplaySystem:
 
     
     def draw_hexagon_anchors(self):
-        """Dibujar anclas UWB en la disposición indoor"""
+        """Draw UWB anchors in the indoor arrangement"""
         anchors = {
             'A1': (-6.0, 0.0, 'blue'),
             'A2': (-2.6, 7.92, 'blue'),  
@@ -678,57 +678,57 @@ class UWBHexagonReplaySystem:
             self.ax.text(x, y + 0.3, anchor_id, ha='center', va='bottom', fontsize=9, color='black')
     
     def draw_hexagon_area(self):
-        """Dibujar el perímetro del hexágono irregular con vértices ordenados correctamente"""
-        # Vértices en orden horario empezando desde superior izquierdo
+        """Draw the irregular hexagon perimeter with correctly ordered vertices"""
+        # Vertices in clockwise order starting from upper left
         verts = [
-            (-6.9, -2),      # Vértice inferior izquierdo (corregido)
-            (-1.6, 10.36),   # Vértice superior izquierdo
-            (2.1, 10.36),    # Vértice superior derecho
-            (6.8, -1.8),     # Vértice inferior derecho
-            (0, -1.8),       # Vértice inferior centro
-            (-0.4, -3.5)     # Vértice inferior extremo
+            (-6.9, -2),      # Lower left vertex (corrected)
+            (-1.6, 10.36),   # Upper left vertex
+            (2.1, 10.36),    # Upper right vertex
+            (6.8, -1.8),     # Lower right vertex
+            (0, -1.8),       # Lower center vertex
+            (-0.4, -3.5)     # Lower extreme vertex
         ]
         poly = patches.Polygon(verts, closed=True, fill=False, edgecolor='orange', linewidth=3, alpha=0.8)
         self.ax.add_patch(poly)
         
-        # Añadir etiquetas de vértices para debug
+        # Add vertex labels for debug
         for i, (x, y) in enumerate(verts):
             self.ax.plot(x, y, 'ro', markersize=6, alpha=0.7)
             self.ax.text(x+0.2, y+0.2, f'V{i+1}', fontsize=8, color='red', alpha=0.8)
     
     def setup_dynamic_elements(self):
-        """Configurar elementos que cambian durante la animación"""
-        # === JUGADOR PRINCIPAL ===
-        # Jugador con diseño mejorado (camiseta + número)
+        """Configure elements that change during the animation"""
+        # === MAIN PLAYER ===
+        # Player with improved design (shirt + number)
         self.player_dot, = self.ax.plot([], [], 'o', color='#FFD700', markersize=18, 
                                        markeredgecolor='#FF4500', markeredgewidth=3,
-                                       label='Jugador', zorder=20)
+                                       label='Player', zorder=20)
         
-        # Número del jugador
+        # Player number
         self.player_number = self.ax.text(0, 0, '7', ha='center', va='center',
                                         fontsize=10, fontweight='bold', color='white', zorder=21)
         
-        # === TRAYECTORIA COMPLETA (toda la trayectoria visible) ===
+        # === FULL TRAJECTORY (all trajectory visible) ===
         if not self.skip_trail:
-            # Trayectoria principal con degradado
+            # Main trajectory with gradient
             self.trail_line, = self.ax.plot([], [], '-', color='#FF6B35', alpha=0.8, linewidth=3,
-                                           label='Trayectoria Completa', zorder=10)
+                                           label='Complete Trajectory', zorder=10)
             
-            # Trayectoria secundaria (sombra)
+            # Secondary trajectory (shadow)
             self.trail_shadow, = self.ax.plot([], [], '-', color='black', alpha=0.3, linewidth=5,
                                              zorder=9)
             
-            # Puntos de trayectoria con tamaño variable
+            # Trajectory points with variable size
             self.trail_dots, = self.ax.plot([], [], 'o', color='#FF8C42', alpha=0.4, markersize=3,
                                            zorder=11)
-            print(" Trayectoria completa habilitada (toda la ruta visible)")
+            print(" Full trajectory enabled (all path visible)")
         else:
-            # Modo optimización: solo línea básica pero completa
+            # Optimization mode: only basic line but complete
             self.trail_line, = self.ax.plot([], [], '-', color='#FF6B35', alpha=0.6, linewidth=2,
-                                           label='Trayectoria Completa (optimizada)', zorder=10)
+                                           label='Complete Trajectory (optimized)', zorder=10)
             self.trail_shadow = None
             self.trail_dots = None
-            print(" Modo optimización memoria: trayectoria completa simplificada")
+            print(" Memory optimization mode: simplified full trajectory")
         
         # === INDICADORES DE VELOCIDAD ===
         # Círculo de velocidad (DESACTIVADO para máxima fluidez)
@@ -754,71 +754,71 @@ class UWBHexagonReplaySystem:
         # Eliminado para optimización de memoria - usar directamente self.df si se necesita
         
     def setup_info_panel(self):
-        """Configurar panel de información en tiempo real"""
-        # Panel de información COMPACTO (esquina superior izquierda)
-        info_text = ("CONTROLES: SPACE=Play/Pause | ←→=Frame | ↑↓=Velocidad | R=Reset | Q=Salir")
+        """Configure real-time information panel"""
+        # Compact information panel (upper left corner)
+        info_text = ("CONTROLS: SPACE=Play/Pause | ←→=Frame | ↑↓=Speed | R=Reset | Q=Exit")
         
         self.info_panel = self.ax.text(0.02, 0.98, info_text, transform=self.ax.transAxes,
                                      va='top', ha='left', fontsize=9, color='white',
                                      bbox=dict(boxstyle='round,pad=0.4', 
                                              facecolor='black', alpha=0.8))
         
-        # Panel de estadísticas (lado izquierdo, debajo de controles)
+        # Statistics panel (left side, below controls)
         self.stats_panel = self.ax.text(0.02, 0.88, '', transform=self.ax.transAxes,
                                       va='top', ha='left', fontsize=8, color='white',
                                       bbox=dict(boxstyle='round,pad=0.3', 
                                               facecolor='darkgreen', alpha=0.85))
         
     def setup_animation_controls(self):
-        """Configurar controles de animación con velocidades 0.1x-10x"""
+        """Configure animation controls with speeds 0.1x-10x"""
         self.current_frame = 0
         self.total_frames = len(self.df) if self.df is not None else 0
         self.is_playing = False
         self.playback_speed = 1.0
-        self.max_playback_speed = 10.0  # Velocidad máxima de reproducción (10x)
-        self.min_speed = 0.1            # Velocidad mínima de reproducción (0.1x)
+        self.max_playback_speed = 10.0  # Maximum playback speed (10x)
+        self.min_speed = 0.1            # Minimum playback speed (0.1x)
         
-        # Conectar eventos de teclado
+        # Connect keyboard events
         self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
         
     def get_player_zone(self, x, y):
-        """Determinar la zona actual del jugador en el área hexagonal indoor"""
-        # === ZONAS PARA ÁREA HEXAGONAL INDOOR ===
-        # Verificar si está dentro del área válida
+        """Determine the current player zone in the indoor hexagonal area"""
+        # === ZONES FOR INDOOR HEXAGONAL AREA ===
+        # Verify if it is within the valid area
         if not (-6.9 <= x <= 6.8 and -3.5 <= y <= 10.36):
-            return "FUERA DEL ÁREA"
+            return "OUTSIDE THE AREA"
         
-        # Zonas específicas del área indoor
+        # Specific zones for the indoor area
         if y >= 8.0:
-            return "ZONA NORTE"
+            return "NORTH ZONE"
         elif y <= -1.0:
-            return "ZONA SUR"
+            return "SOUTH ZONE"
         elif x >= 4.0:
-            return "ZONA ESTE"
+            return "EAST ZONE"
         elif x <= -4.0:
-            return "ZONA OESTE"
+            return "WEST ZONE"
         elif -2.0 <= x <= 2.0 and 2.0 <= y <= 6.0:
-            return "ZONA CENTRAL"
+            return "CENTER ZONE"
         else:
-            return "ÁREA INDOOR"
+            return "INDOOR AREA"
     
     def calculate_speed(self, frame_idx):
-        """Calcular velocidad instantánea con límites realistas"""
+        """Calculate instantaneous speed with realistic limits"""
         if self.df is None or frame_idx == 0:
             return 0.0
             
         current_row = self.df.iloc[frame_idx]
         prev_row = self.df.iloc[frame_idx - 1]
         
-        # Distancia euclidiana
+        # Euclidean distance
         dx = current_row['x'] - prev_row['x'] 
         dy = current_row['y'] - prev_row['y']
         distance = np.sqrt(dx**2 + dy**2)
         
-        # Tiempo transcurrido
+        # Elapsed time
         dt = (current_row['timestamp'] - prev_row['timestamp']).total_seconds()
         
-        # Prevención de división entre cero
+        # Prevent division by zero
         if dt == 0 or dt <= 0:
             return 0.0
             
@@ -829,9 +829,9 @@ class UWBHexagonReplaySystem:
         max_realistic_speed = 8.0
         
         if speed > max_realistic_speed:
-            # Advertencia solo para casos extremos (>2x límite)
+            # Warning only for extreme cases (>2x limit)
             if speed > max_realistic_speed * 2 and self.verbose_debug:
-                print(f"   [SPEED WARNING] Velocidad irreal detectada: {speed:.1f} m/s → limitada a {max_realistic_speed} m/s")
+                print(f"   [SPEED WARNING] Unrealistic speed detected: {speed:.1f} m/s → limited to {max_realistic_speed} m/s")
             speed = max_realistic_speed
         
         # Suavizado simple con frame anterior para evitar picos
@@ -933,13 +933,13 @@ class UWBHexagonReplaySystem:
         # === OPTIMIZACIÓN: Usar distancia acumulativa precalculada ===
         total_distance = self.df['cum_dist'].iloc[frame_idx] if frame_idx < len(self.df) else 0
         
-        # Clasificación de velocidad (iconos ASCII compatibles)
+        # Speed classification (ASCII compatible icons)
         if speed < 1.0:
-            speed_class = "[WALK] CAMINANDO"
+            speed_class = "[WALK] WALKING"
         elif speed < 3.0:
-            speed_class = "[JOG]  TROTE"
+            speed_class = "[JOG]  JOGGING"
         elif speed < 5.0:
-            speed_class = "[RUN]  CARRERA"
+            speed_class = "[RUN]  RUNNING"
         else:
             speed_class = "[SPRINT] SPRINT"
         
@@ -985,72 +985,72 @@ class UWBHexagonReplaySystem:
         return self.update_frame(self.current_frame)
     
     def on_key_press(self, event):
-        """Manejar eventos de teclado"""
+        """Handle keyboard events"""
         if event.key == ' ':  # Space - Play/Pause
             self.is_playing = not self.is_playing
-            print(f"Reproducción: {'Iniciada' if self.is_playing else 'Pausada'}")
+            print(f"Replay: {'Started' if self.is_playing else 'Paused'}")
             
-        elif event.key == 'left':  # Flecha izquierda - Frame anterior
+        elif event.key == 'left':  # Left arrow
             self.current_frame = max(0, self.current_frame - 1)
             print(f" Frame: {self.current_frame + 1}/{self.total_frames}")
             
-        elif event.key == 'right':  # Flecha derecha - Frame siguiente
+        elif event.key == 'right':  # Right arrow
             self.current_frame = min(self.total_frames - 1, self.current_frame + 1)
             print(f" Frame: {self.current_frame + 1}/{self.total_frames}")
             
-        elif event.key == 'up':  # Flecha arriba - Aumentar velocidad
+        elif event.key == 'up':  # Up arrow
             self.playback_speed = min(self.max_playback_speed, self.playback_speed + 0.5)
-            print(f" Velocidad: {self.playback_speed:.1f}x")
-            # Actualizar intervalo de animación instantáneamente (limitado a 60 FPS para hardware lento)
+            print(f" Speed: {self.playback_speed:.1f}x")
+            # Update animation interval immediately (limited to 60 FPS for slow hardware)
             if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
                 self.anim.event_source.interval = max(17, int(40 / self.playback_speed))
-            # Sincronizar slider evitando callback recursivo
+            # Synchronize slider avoiding recursive callback
             self._sync_slider_safely(self.playback_speed)
             
-        elif event.key == 'down':  # Flecha abajo - Reducir velocidad
+        elif event.key == 'down':  # Down arrow
             self.playback_speed = max(self.min_speed, self.playback_speed - 0.5)
-            print(f" Velocidad: {self.playback_speed:.1f}x")
-            # Actualizar intervalo de animación instantáneamente (limitado a 60 FPS para hardware lento)
+            print(f" Speed: {self.playback_speed:.1f}x")
+            # Update animation interval immediately (limited to 60 FPS for slow hardware)
             if hasattr(self, 'anim') and hasattr(self.anim, 'event_source'):
                 self.anim.event_source.interval = max(17, int(40 / self.playback_speed))
-            # Sincronizar slider evitando callback recursivo
+            # Synchronize slider avoiding recursive callback
             self._sync_slider_safely(self.playback_speed)
             
-        elif event.key == 'r':  # R - Reiniciar
+        elif event.key == 'r':  # R - Restart
             self.current_frame = 0
             self.is_playing = False
-            print(" Replay reiniciado")
+            print(" Replay restarted")
             
-        elif event.key == 'q':  # Q - Salir
-            print(" Cerrando replay...")
+        elif event.key == 'q':  # Q - Exit
+            print(" Closing replay...")
             plt.close(self.fig)
             
-        # Actualizar visualización inmediatamente
+        # Update visualization immediately
         if not self.is_playing:
             self.update_frame(self.current_frame)
             self.fig.canvas.draw()
     
     def start_replay(self):
-        """Iniciar el sistema de replay"""
-        print("\n Iniciando Sistema de Replay UWB")
+        """Start the replay system"""
+        print("\n Starting UWB Replay System")
         print("=" * 50)
-        print("  Usa las teclas para controlar la reproducción:")
+        print("  Use the keys to control the replay:")
         print("   SPACE:   Play/Pause")
-        print("   ←/→: Frame anterior/siguiente") 
-        print("   ↑/↓: Velocidad +/-")
-        print("   R:  Reiniciar")
-        print("   Q:  Salir")
+        print("   ←/→: Previous/Next frame") 
+        print("   ↑/↓: Speed +/-")
+        print("   R:  Restart")
+        print("   Q:  Exit")
         print("=" * 50)
         
-        # Configurar animación
+        # Configure animation
         self.anim = FuncAnimation(
             self.fig, self.animate, frames=self.total_frames,
-            interval=40,  # 25 FPS = 40ms entre frames
+            interval=40,  # 25 FPS = 40ms between frames
             repeat=True, blit=False
         )
         
-        # Mostrar replay
-        # Ajuste de layout manual ya realizado con subplots_adjust para evitar solapamientos
+        # Show replay
+        # Manual layout adjustment already done with subplots_adjust to avoid overlaps
         plt.subplots_adjust(left=0.05, right=0.98, bottom=0.12, top=0.94)
         plt.show()
 
@@ -1109,27 +1109,27 @@ class UWBHexagonReplaySystem:
             self.anim.event_source.interval = max(17, int(40 / self.playback_speed))
     
     def toggle_kalman(self, event):
-        """Activar/desactivar filtro de Kalman"""
+        """Activate/deactivate Kalman filter"""
         self.use_kalman_filter = not self.use_kalman_filter
-        print(f" Filtro de Kalman: {'Activado' if self.use_kalman_filter else 'Desactivado'}")
+        print(f" Kalman filter: {'Activated' if self.use_kalman_filter else 'Deactivated'}")
         self.update_button_colors()
         
-        # === OPTIMIZACIÓN: Solo reprocessar Kalman si ya hay datos interpolados ===
+        # === OPTIMIZATION: Only reprocess Kalman if already interpolated data ===
         if self.df is not None and len(self.df) > 0:
-            # Mantener datos base y solo reaplicar Kalman
+            # Keep base data and only reapply Kalman
             self._reapply_kalman_filter()
         else:
-            # Primer procesado o datos no válidos - recarga completa
+            # First processing or invalid data - full reload
             self.apply_advanced_filtering()
     
     def _reapply_kalman_filter(self):
-        """Reaplicar solo el filtro de Kalman a datos ya interpolados"""
+        """Reapply Kalman filter to already interpolated data"""
         if self.df is None:
             return
             
-        print(" Reaplicando filtro de Kalman...")
+        print(" Reapplying Kalman filter...")
         
-        # Reinicializar filtro de Kalman si está activado
+        # Reinitialize Kalman filter if activated
         if self.use_kalman_filter:
             first_valid_pos = self.find_first_valid_position()
             if first_valid_pos is not None:
@@ -1139,7 +1139,7 @@ class UWBHexagonReplaySystem:
                     measurement_noise=0.1
                 )
                 
-                # Reaplicar Kalman a las posiciones existentes
+                # Reapply Kalman to existing positions
                 dt = self.animation_step_ms / 1000.0
                 for i in range(len(self.df)):
                     pos = [self.df.iloc[i]['x'], self.df.iloc[i]['y']]
@@ -1147,56 +1147,56 @@ class UWBHexagonReplaySystem:
                     self.df.iloc[i, self.df.columns.get_loc('x')] = filtered_pos[0]
                     self.df.iloc[i, self.df.columns.get_loc('y')] = filtered_pos[1]
         else:
-            # Si se desactiva Kalman, necesitamos datos originales - recarga completa
+            # If Kalman is deactivated, we need original data - full reload
             self.apply_advanced_filtering()
     
     def toggle_ml(self, event):
-        """Activar/desactivar predicción ML"""
+        """Activate/deactivate ML prediction"""
         self.use_ml_prediction = not self.use_ml_prediction
-        print(f"Prediccion ML: {'Activada' if self.use_ml_prediction else 'Desactivada'}")
+        print(f"ML prediction: {'Activated' if self.use_ml_prediction else 'Deactivated'}")
         self.update_button_colors()
         
-        # === OPTIMIZACIÓN: Solo recalcular si realmente es necesario ===
-        # ML solo afecta interpolación de gaps, no datos ya válidos
-        # Solo recarga si hay grandes cambios en la interpolación
-        print(" Configuración ML actualizada (efecto en próximos huecos de señal)")
+        # === OPTIMIZATION: Only recalculate if really necessary ===
+        # ML only affects gap interpolation, not already valid data
+        # Only reload if there are large changes in interpolation
+        print(" ML configuration updated (effect on upcoming signal gaps)")
         
-        # Reset del timestamp de entrenamiento para forzar reentrenamiento
+        # Reset training timestamp to force re-training
         self._last_gpr_train_ms = -1
     
     def update_button_colors(self):
-        """Actualizar colores de botones y texto según estado"""
-        # Colores de fondo
+        """Update button and text colors according to state"""
+        # Background colors
         kalman_color = 'lightgreen' if self.use_kalman_filter else 'lightcoral'
         ml_color = 'lightblue' if self.use_ml_prediction else 'lightcoral'
         
-        # Colores de texto (mejor contraste para legibilidad)
+        # Text colors (better contrast for readability)
         kalman_text_color = 'darkgreen' if self.use_kalman_filter else 'darkred'
-        ml_text_color = '#002b5c' if self.use_ml_prediction else 'darkred'  # Azul más oscuro
+        ml_text_color = '#002b5c' if self.use_ml_prediction else 'darkred'  # Darker blue
         
-        # Actualizar fondo de botones
+        # Update button background color
         self.kalman_button.ax.set_facecolor(kalman_color)
         self.ml_button.ax.set_facecolor(ml_color)
         
-        # Actualizar color del texto para máxima claridad
+        # Update text color for maximum clarity
         self.kalman_button.label.set_color(kalman_text_color)
         self.ml_button.label.set_color(ml_text_color)
         
-        # Refrescar UI al instante
+        # Refresh UI immediately
         self.fig.canvas.draw_idle()
 
 def generate_movement_report(csv_file):
-    """Generar reporte de análisis de movimiento"""
+    """Generate movement analysis report"""
     df = pd.read_csv(csv_file)
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     
-    # Calcular estadísticas
+    # Calculate statistics
     total_time = (df['timestamp'].iloc[-1] - df['timestamp'].iloc[0]).total_seconds()
     
-    # Validación temprana: evitar división por cero
+    # Early validation: avoid division by zero
     if total_time <= 0:
-        print("\n  ADVERTENCIA: Duración de datos insuficiente para análisis")
-        print("   Los timestamps no tienen rango temporal válido")
+        print("\n  WARNING: Data duration insufficient for analysis")
+        print("   Timestamps do not have a valid temporal range")
         return
     
     # === OPTIMIZACIÓN: Cálculo eficiente de distancias ===
@@ -1204,70 +1204,70 @@ def generate_movement_report(csv_file):
     x_diff = df['x'].diff()
     y_diff = df['y'].diff()
     step_distances = np.hypot(x_diff, y_diff)
-    step_distances[0] = 0  # Primera distancia es 0
+    step_distances[0] = 0  # First distance is 0
     
     total_distance = step_distances.sum()
-    avg_speed = total_distance / total_time  # Ya validamos total_time > 0
+    avg_speed = total_distance / total_time  # We already validated total_time > 0
     
-    # === CORRECCIÓN: Calcular velocidades realistas ===
-    # Calcular frecuencia real y velocidades frame a frame
+    # === CORRECTION: Calculate realistic speeds ===
+    # Calculate real frequency and frame-by-frame speeds
     freq = len(df) / total_time
     
-    # Velocidades frame a frame con límite realista
-    frame_speeds = step_distances * freq  # velocidad por frame
+    # Frame-by-frame speeds with realistic limit
+    frame_speeds = step_distances * freq  # speed per frame
     
-    # Aplicar límite físico realista
-    max_realistic_speed = 8.0  # m/s - límite humano indoor
+    # Apply realistic physical limit
+    max_realistic_speed = 8.0  # m/s - human indoor limit
     frame_speeds = np.clip(frame_speeds, 0, max_realistic_speed)
     
     max_speed = frame_speeds.max() if len(frame_speeds) > 0 else 0
     
-    # === ADVERTENCIAS DE REALISMO ===
+    # === REALISM WARNINGS ===
     original_max_speed = (step_distances * freq).max() if len(step_distances) > 0 else 0
     if original_max_speed > max_realistic_speed:
-        print(f"\n  VELOCIDADES CORREGIDAS:")
-        print(f"   Velocidad máxima original: {original_max_speed:.1f} m/s (irreal)")
-        print(f"   Velocidad máxima corregida: {max_speed:.1f} m/s (limitada)")
-        print(f"   Las velocidades >8 m/s se limitaron por realismo físico")
+        print(f"\n  CORRECTED SPEEDS:")
+        print(f"   Original maximum speed: {original_max_speed:.1f} m/s (unrealistic)")
+        print(f"   Corrected maximum speed: {max_speed:.1f} m/s (limited)")
+        print(f"   Speeds >8 m/s were limited by physical realism")
     
-    print(f"\n REPORTE DE ANÁLISIS DE MOVIMIENTO")
+    print(f"\n MOVEMENT ANALYSIS REPORT")
     print("=" * 50)
-    print(f"  Duración total: {total_time:.1f} segundos ({total_time/60:.1f} minutos)")
-    print(f" Distancia recorrida: {total_distance:.1f} metros")
-    print(f" Velocidad promedio: {avg_speed:.2f} m/s")
-    print(f" Velocidad máxima: {max_speed:.2f} m/s")
-    print(f" Total de frames: {len(df)}")
-    print(f" Frecuencia de muestreo: ~{len(df)/total_time:.1f} Hz")
+    print(f"  Total duration: {total_time:.1f} seconds ({total_time/60:.1f} minutes)")
+    print(f" Total distance: {total_distance:.1f} meters")
+    print(f" Average speed: {avg_speed:.2f} m/s")
+    print(f" Maximum speed: {max_speed:.2f} m/s")
+    print(f" Total frames: {len(df)}")
+    print(f" Sampling frequency: ~{len(df)/total_time:.1f} Hz")
     
-    # === ANÁLISIS DE REALISMO ===
+    # === REALISM ANALYSIS ===
     if avg_speed > 4.0:
-        print(f"  ADVERTENCIA: Velocidad promedio muy alta ({avg_speed:.1f} m/s)")
-        print("   Velocidad típica indoor: 1.5-3.0 m/s promedio")
+        print(f"  WARNING: Average speed too high ({avg_speed:.1f} m/s)")
+        print("   Typical indoor speed: 1.5-3.0 m/s average")
     elif avg_speed < 0.5:
-        print(f"  INFO: Velocidad promedio baja ({avg_speed:.1f} m/s) - movimiento lento o estático")
+        print(f"  INFO: Low average speed ({avg_speed:.1f} m/s) - slow or static movement")
     else:
-        print(f" Velocidad promedio realista ({avg_speed:.1f} m/s)")
+        print(f" Realistic average speed ({avg_speed:.1f} m/s)")
     
     if max_speed > 7.0:
-        print(f"  ADVERTENCIA: Velocidad máxima muy alta ({max_speed:.1f} m/s)")
+        print(f"  WARNING: Maximum speed too high ({max_speed:.1f} m/s)")
     else:
-        print(f" Velocidad máxima realista ({max_speed:.1f} m/s)")
+        print(f" Realistic maximum speed ({max_speed:.1f} m/s)")
     
     print("=" * 50)
 
 def select_replay_file_interactive():
     """
-    Selección interactiva de archivos para replay desde uwb_data
+    Interactive file selection for replay from uwb_data
     """
     
-    print("\n SELECCIONAR ARCHIVO PARA REPLAY UWB")
+    print("\n SELECT REPLAY FILE FOR UWB")
     print("=" * 70)
-    print("Ubicación de archivos:")
-    print(f"     Directorio actual: {os.getcwd()}")
-    print(f"    uwb_data/: Archivos de posiciones UWB")
+    print("File location:")
+    print(f"     Current directory: {os.getcwd()}")
+    print(f"    uwb_data/: UWB position files")
     print("=" * 70)
     
-    # Buscar archivos uwb_positions_ en uwb_data/
+    # Search for uwb_positions_ in uwb_data/
     data_files = []
     
     if os.path.exists("uwb_data"):
@@ -1276,14 +1276,14 @@ def select_replay_file_interactive():
                 data_files.append(file_path)
     
     if not data_files:
-        print("No se encontraron archivos de posiciones UWB")
-        print("Asegúrate de tener archivos uwb_positions_*.csv en la carpeta 'uwb_data/'")
+        print("No UWB position files found")
+        print("Make sure you have uwb_positions_*.csv files in the 'uwb_data/' folder")
         return None
     
-    # Ordenar por fecha de modificación (más recientes primero)
+    # Sort by modification date (most recent first)
     data_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
     
-    print(f"\nARCHIVOS DISPONIBLES ({len(data_files)} encontrados):")
+    print(f"\nAVAILABLE FILES ({len(data_files)} found):")
     print("=" * 70)
     
     for i, file_path in enumerate(data_files, 1):
@@ -1293,31 +1293,31 @@ def select_replay_file_interactive():
             mod_time = os.path.getmtime(file_path)
             mod_date = datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M")
             
-            # Extraer timestamp del nombre del archivo
+            # Extract timestamp from file name
             timestamp_part = file_name.replace("uwb_positions_", "").replace(".csv", "")
             
             if file_size > 15:
-                quality_desc = "RECOMENDADO"
+                quality_desc = "RECOMMENDED"
             elif file_size > 5:
-                quality_desc = "BUENO"
+                quality_desc = "GOOD"
             else:
-                quality_desc = "PEQUEÑO"
+                quality_desc = "SMALL"
             
             print(f"{i:2d}. {file_name}")
             print(f"     {file_size:7.1f}KB | {mod_date} | {quality_desc}")
             print()
             
         except Exception as e:
-            print(f"{i:2d}. Error leyendo archivo: {file_path} - {e}")
+            print(f"{i:2d}. Error reading file: {file_path} - {e}")
     
-    print("0. Cancelar")
+    print("0. Cancel")
     
     while True:
         try:
-            choice = input(f"\nSelecciona un archivo (1-{len(data_files)}) o 0 para cancelar: ").strip()
+            choice = input(f"\nSelect a file (1-{len(data_files)}) or 0 to cancel: ").strip()
             
             if choice == '0':
-                print("Operación cancelada")
+                print("Operation cancelled")
                 return None
             
             file_idx = int(choice) - 1
@@ -1325,59 +1325,59 @@ def select_replay_file_interactive():
                 selected_file = data_files[file_idx]
                 
                 if not os.path.exists(selected_file):
-                    print(f"Error: El archivo seleccionado no existe: {selected_file}")
+                    print(f"Error: The selected file does not exist: {selected_file}")
                     continue
                 
                 file_size = os.path.getsize(selected_file) / 1024
                 
-                print(f"ARCHIVO SELECCIONADO:")
-                print(f"    Archivo: {os.path.basename(selected_file)}")
-                print(f"    Tamaño: {file_size:.1f} KB")
-                print(f"    Ruta completa: {os.path.abspath(selected_file)}")
+                print(f"SELECTED FILE:")
+                print(f"    File: {os.path.basename(selected_file)}")
+                print(f"    Size: {file_size:.1f} KB")
+                print(f"    Full path: {os.path.abspath(selected_file)}")
                 
                 return selected_file
             else:
-                print(f"Número inválido. Ingresa un número entre 1 y {len(data_files)}")
+                print(f"Invalid number. Enter a number between 1 and {len(data_files)}")
                 
         except ValueError:
-            print("Por favor ingresa un número válido")
+            print("Please enter a valid number")
         except KeyboardInterrupt:
-            print("Operación cancelada")
+            print("Operation cancelled")
             return None
 
 
 def main():
-    """Función principal"""
+    """Main function"""
     parser = argparse.ArgumentParser(
-        description='Sistema de Replay UWB para Análisis de Localización Indoor',
+        description='UWB Replay System for Indoor Localization Analysis',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Ejemplos de uso:
-  python movement_replay.py                                    # Selección interactiva
-  python movement_replay.py uwb_data/uwb_positions_xxx.csv    # Archivo específico
-  python movement_replay.py --report uwb_data/uwb_positions_xxx.csv  # Solo reporte
-  python movement_replay.py --optimize-memory large_data.csv  # Optimización memoria
+Usage examples:
+  python movement_replay.py                                    # Interactive selection
+  python movement_replay.py uwb_data/uwb_positions_xxx.csv    # Specific file
+  python movement_replay.py --report uwb_data/uwb_positions_xxx.csv  # Only report
+  python movement_replay.py --optimize-memory large_data.csv  # Memory optimization
         """
     )
     
     parser.add_argument('csv_file', nargs='?', 
-                       help='Archivo CSV con datos de movimiento (opcional - si no se especifica, selección interactiva)')
+                       help='CSV file with movement data (optional - if not specified, interactive selection)')
     parser.add_argument('--report', action='store_true',
-                       help='Mostrar solo reporte de análisis sin replay')
+                       help='Show only analysis report without replay')
     parser.add_argument('--optimize-memory', action='store_true',
-                       help='Optimizar memoria para datasets grandes (>1M filas)')
+                       help='Optimize memory for large datasets (>1M rows)')
     parser.add_argument('--skip-trail', action='store_true',
-                       help='Omitir trayectoria en tiempo real para reducir memoria')
+                       help='Omit real-time trail to reduce memory')
     parser.add_argument('--verbose-debug', action='store_true',
-                       help='Mostrar todos los logs de debug GPR (puede generar spam)')
+                       help='Show all GPR debug logs (can generate spam)')
     
     args = parser.parse_args()
     
-    # Selección de archivo
+    # File selection
     if args.csv_file:
-        # Archivo especificado por parámetro
+        # File specified by parameter
         if not os.path.exists(args.csv_file):
-            print(f"Error: No se encontró el archivo '{args.csv_file}'")
+            print(f"Error: File '{args.csv_file}' not found")
             return
         selected_file = args.csv_file
     else:
@@ -1395,9 +1395,9 @@ Ejemplos de uso:
             replay_system.start_replay()
             
     except KeyboardInterrupt:
-        print("\nSistema de replay finalizado por el usuario")
+        print("\nReplay system cancelled by user")
     except Exception as e:
-        print(f"Error durante el replay: {e}")
+        print(f"Error during replay: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

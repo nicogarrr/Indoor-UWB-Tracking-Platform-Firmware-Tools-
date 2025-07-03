@@ -5,25 +5,25 @@
 #include <ESPAsyncWebServer.h>
 #define MQTT_MAX_PACKET_SIZE 2048 
 #include <PubSubClient.h>
-#include <cmath>  // Para fabs, sqrt, etc.
+#include <cmath>  // For fabs, sqrt, etc.
 #include <ArduinoJson.h>
 #include "esp_wifi.h"
 #include "esp_bt.h"
 
-// ===== IDENTIFICACIÓN DEL TAG =====
+// ===== TAG IDENTIFICATION =====
 #define TAG_ID 1 
 
 
 const uint32_t WS_SEND_INTERVAL_MS = 33; // 1000/33 ≈ 30 fps
 
-// ===== CONFIGURACIÓN WiFi =====
+// ===== WiFi CONFIGURATION =====
 #define USE_AP_MODE false
 #define AP_SSID "UWB_TAG_AP"
 #define AP_PASS "12345678"
 #define STA_SSID "iPhone de Nicolas"
 #define STA_PASS "12345678"
 
-// Configuraciones del servidor 
+// Server configuration 
 #define HTTP_PORT 80
 AsyncWebServer server(HTTP_PORT);
 AsyncWebSocket ws("/ws");
@@ -44,13 +44,13 @@ const int logServerPort = 5000;
 const unsigned long TDMA_CYCLE_MS = 60; 
 const unsigned long TDMA_SLOT_DURATION_MS = 20; 
 
-// ===== CONFIGURACIÓN DE RANGING =====
+// ===== RANGING CONFIGURATION =====
 #define ROUND_DELAY 100
 static int frame_buffer = 0;
 static int rx_status;
 static int tx_status;
 
-// Estados del ranging
+// Ranging states
 static int curr_stage = 0;
 
 static int t_roundA = 0;
@@ -63,7 +63,7 @@ static int clock_offset = 0;
 static int ranging_time = 0;
 static float distance = 0;
 
-// Configuraciones para mediciones y filtrado (INDOOR)
+// Configuration for measurements and filtering (INDOOR)
 #define NUM_MEASUREMENTS 3
 #define NUM_ANCHORS 5 
 int ID_PONG[NUM_ANCHORS] = {1, 2, 3, 4, 5}; 
@@ -75,26 +75,26 @@ float pot_sig[NUM_ANCHORS] = {0};
 static int fin_de_com = 0;
 bool anchor_responded[NUM_ANCHORS] = {false}; 
 
-// Variables para timeout 
+// Variables for timeout 
 unsigned long timeoutStart = 0;
 bool waitingForResponse = false;
 const unsigned long RESPONSE_TIMEOUT = 35; 
 
-// Variables para gestor de estados 
+// Variables for state manager 
 unsigned long lastUpdate = 0;
 unsigned long updateInterval = 12; 
 
-// Variables para modo de bajo consumo
+// Variables for low power mode
 unsigned long lastActivityTime = 0;
 const unsigned long SLEEP_TIMEOUT = 300000;
 bool lowPowerMode = false;
 
-// Variables para Filtro de Kalman 
+// Variables for Kalman Filter 
 float kalman_dist[NUM_ANCHORS][2] = { {0} };
 float kalman_dist_q = 0.005; 
 float kalman_dist_r = 0.08; 
 
-// Variables para posición 
+// Variables for position 
 float kalman_x = 0.0;
 float kalman_y = 0.0;
 float kalman_p_x = 1.0;
@@ -102,11 +102,11 @@ float kalman_p_y = 1.0;
 float kalman_q = 0.01; 
 float kalman_r = 0.05; 
 
-// Variables para la posición del tag
+// Variables for tag position
 float tagPositionX = 0.0;
 float tagPositionY = 0.0;
 
-// Variables para trilateración inteligente 
+// Variables for intelligent trilateration 
 int last_anchor_combination[3] = {0, 1, 2}; 
 unsigned long last_trilateration_time = 0;
 float last_valid_position[2] = {0.0, 0.0}; 
@@ -114,16 +114,16 @@ bool combination_stable = false;
 float rssi_threshold = 5.0; 
 float validation_threshold = 1.0; 
 
-// ===== POSICIONES DE ANCLAS GLOBALES (anclas 1-5) =====
+// ===== GLOBAL ANCHOR POSITIONS (anchors 1-5) =====
 const float anchorsPos[NUM_ANCHORS][2] = {
-  {-6.0,  0.0},   // Ancla 1 (índice 0) - Oeste
-  {-2.6,  7.92},  // Ancla 2 (índice 1) - Noroeste 
-  { 2.1, 10.36},  // Ancla 3 (índice 2) - Noreste
-  { 6.35, 0.0},   // Ancla 4 (índice 3) - Este 
-  { 0.0, -1.8}    // Ancla 5 (índice 4) - Sur centro
+  {-6.0,  0.0},   // Anchor 1 (index 0) - West
+  {-2.6,  7.92},  // Anchor 2 (index 1) - Northwest 
+  { 2.1, 10.36},  // Anchor 3 (index 2) - Northeast
+  { 6.35, 0.0},   // Anchor 4 (index 3) - East 
+  { 0.0, -1.8}    // Anchor 5 (index 4) - South center
 };
 
-// ===== FUNCIONES HELPER =====
+// ===== HELPER FUNCTIONS =====
 int getAnchorIndex(int anchor_id) {
   if (anchor_id >= 1 && anchor_id <= 5) {
     return anchor_id - 1;
@@ -135,7 +135,7 @@ int getAnchorNumber(int array_index) {
   return array_index + 1;
 }
 
-// ===== TRILATERACIÓN INTELIGENTE =====
+// ===== INTELLIGENT TRILATERATION =====
 bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
   if (count < 3) return false;
   
@@ -161,21 +161,21 @@ bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
     
     if (all_available) {
       previous_avg_rssi /= 3.0;
-      // Solo mantener si el RSSI promedio sigue siendo bueno
+      // Keep if the average RSSI is still good
       if (previous_avg_rssi > -85.0) {
         selected[0] = last_anchor_combination[0];
         selected[1] = last_anchor_combination[1];
         selected[2] = last_anchor_combination[2];
         can_keep_previous = true;
-        Serial.printf("[TRILAT-A] Mantiene anterior: [%d,%d,%d], RSSI=%.1f\n", 
+        Serial.printf("[TRILAT-A] Keeping previous: [%d,%d,%d], RSSI=%.1f\n", 
                      getAnchorNumber(selected[0]), getAnchorNumber(selected[1]), getAnchorNumber(selected[2]), previous_avg_rssi);
       }
     }
   }
   
-  // === PASO 2: Selección nueva por RSSI + geometría ===
+  // === STEP 2: New selection by RSSI + geometry ===
   if (!can_keep_previous) {
-    // Ordenar anclas por RSSI (mejor primero)
+    // Sort anchors by RSSI (best first)
     int sorted_anchors[NUM_ANCHORS];
     float sorted_rssi[NUM_ANCHORS];
     
@@ -184,15 +184,15 @@ bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
        sorted_rssi[i] = pot_sig[available_anchors[i]];
      }
     
-    // Bubble sort por RSSI descendente
+    // Bubble sort by descending RSSI
     for (int i = 0; i < count - 1; i++) {
       for (int j = 0; j < count - i - 1; j++) {
         if (sorted_rssi[j] < sorted_rssi[j + 1]) {
-          // Intercambiar RSSI
+          // Swap RSSI
           float temp_rssi = sorted_rssi[j];
           sorted_rssi[j] = sorted_rssi[j + 1];
           sorted_rssi[j + 1] = temp_rssi;
-          // Intercambiar índices
+          // Swap indices
           int temp_anchor = sorted_anchors[j];
           sorted_anchors[j] = sorted_anchors[j + 1];
           sorted_anchors[j + 1] = temp_anchor;
@@ -200,39 +200,40 @@ bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
       }
     }
     
-    // Inicialmente tomar las 3 mejores por RSSI
+    // Initially take the 3 best by RSSI
     selected[0] = sorted_anchors[0];
     selected[1] = sorted_anchors[1];
     selected[2] = sorted_anchors[2];
     
-    // Verificar geometría de este trío
+    // Verify geometry of this trio
          float det = calculateDeterminant(selected[0], selected[1], selected[2]);
     
-    // Si geometría es mala, sustituir el de peor RSSI por el siguiente
+    // If geometry is bad, replace the worst RSSI with the next one
     if (fabs(det) < 0.001 && count > 3) {
-             selected[2] = sorted_anchors[3]; // Reemplazar el 3º (peor RSSI del trío) por el 4º
-       det = calculateDeterminant(selected[0], selected[1], selected[2]);
-      Serial.println("[TRILAT-A] Reemplazado por geometría");
+      selected[2] = sorted_anchors[3]; // Replace the 3rd (worst RSSI of the trio) with the 4th
+      det = calculateDeterminant(selected[0], selected[1], selected[2]);
+      Serial.printf("[TRILAT-A] Replacing worst RSSI of the trio with the 4th: [%d,%d,%d\n", 
+                   getAnchorNumber(selected[0]), getAnchorNumber(selected[1]), getAnchorNumber(selected[2]));
     }
     
-    // Actualizar combinación estable
+    // Update stable combination
     last_anchor_combination[0] = selected[0];
     last_anchor_combination[1] = selected[1];
     last_anchor_combination[2] = selected[2];
     combination_stable = true;
     
-         Serial.printf("[TRILAT-A] Nueva selección: [%d,%d,%d], RSSI=[%.1f,%.1f,%.1f], Det=%.3f\n",
+    Serial.printf("[TRILAT-A] New selection: [%d,%d,%d], RSSI=[%.1f,%.1f,%.1f], Det=%.3f\n",
                   getAnchorNumber(selected[0]), getAnchorNumber(selected[1]), getAnchorNumber(selected[2]),
                   pot_sig[selected[0]], pot_sig[selected[1]], pot_sig[selected[2]], det);
   }
   
-  // === PASO 3: Calcular posición provisional ===
+  // === STEP 3: Calculate provisional position ===
   float test_x, test_y;
   bool trilat_ok = calculateTrilateration(selected[0], selected[1], selected[2], &test_x, &test_y);
   
   if (!trilat_ok) return false;
   
-  // === PASO 4: Validar con anclas restantes ===
+  // === STEP 4: Validate with remaining anchors ===
   bool validation_passed = true;
   float max_error = 0;
   int worst_anchor = -1;
@@ -240,12 +241,12 @@ bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
   for (int i = 0; i < count; i++) {
     int anchor_id = available_anchors[i];
     
-    // Saltar las 3 ya usadas
+    // Skip the 3 already used
     if (anchor_id == selected[0] || anchor_id == selected[1] || anchor_id == selected[2]) {
       continue;
     }
     
-    // Calcular distancia esperada vs medida
+    // Calculate expected distance vs measured
     float expected_dist = sqrt(pow(test_x - anchorsPos[anchor_id][0], 2) + 
                               pow(test_y - anchorsPos[anchor_id][1], 2));
          float measured_dist = anchor_distance[anchor_id]; // Ya en metros
@@ -260,18 +261,18 @@ bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
       validation_passed = false;
     }
     
-    Serial.printf("[TRILAT-A] Validación ancla %d: esperado=%.2fm, medido=%.2fm, error=%.2fm\n",
+    Serial.printf("[TRILAT-A] Validation anchor %d: expected=%.2fm, measured=%.2fm, error=%.2fm\n",
                  getAnchorNumber(anchor_id), expected_dist, measured_dist, error);
   }
   
-  // === PASO 5: Re-selección si validación falla ===
+  // === STEP 5: Re-selection if validation fails ===
   if (!validation_passed && count >= 4) {
-    Serial.printf("[TRILAT-A] Validación falló, error máx=%.2fm en ancla %d, reintentando...\n", 
+    Serial.printf("[TRILAT-A] Validation failed, max error=%.2fm in anchor %d, retrying...\n", 
                  max_error, getAnchorNumber(worst_anchor));
     
-    // Intentar reemplazar el de peor RSSI del trío actual por el que falló validación
+    // Try replacing the worst RSSI of the current trio with the one that failed validation
     if (worst_anchor >= 0) {
-             // Encontrar cuál del trío tiene peor RSSI
+             // Find which of the trio has the worst RSSI
        int worst_in_trio = selected[0];
        float worst_rssi = pot_sig[selected[0]];
        
@@ -282,7 +283,7 @@ bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
         }
       }
       
-      // Reemplazar
+      // Replace
       for (int i = 0; i < 3; i++) {
         if (selected[i] == worst_in_trio) {
           selected[i] = worst_anchor;
@@ -290,9 +291,9 @@ bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
         }
       }
       
-      Serial.printf("[TRILAT-A] Reemplazo: ancla %d por %d\n", getAnchorNumber(worst_in_trio), getAnchorNumber(worst_anchor));
+      Serial.printf("[TRILAT-A] Replacement: anchor %d by %d\n", getAnchorNumber(worst_in_trio), getAnchorNumber(worst_anchor));
       
-      // Actualizar combinación
+      // Update combination
       last_anchor_combination[0] = selected[0];
       last_anchor_combination[1] = selected[1];
       last_anchor_combination[2] = selected[2];
@@ -302,7 +303,7 @@ bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
   return true;
 }
 
-// Función auxiliar para calcular determinante (usa anchorsPos global)
+// Helper function to calculate determinant (uses global anchorsPos)
 float calculateDeterminant(int a0, int a1, int a2) {
   float A = 2 * (anchorsPos[a1][0] - anchorsPos[a0][0]);
   float B = 2 * (anchorsPos[a1][1] - anchorsPos[a0][1]);
@@ -311,7 +312,7 @@ float calculateDeterminant(int a0, int a1, int a2) {
   return A * E - B * D;
 }
 
-// Función auxiliar para trilateración (usa anchorsPos global)
+// Helper function for trilateration (uses global anchorsPos)
 bool calculateTrilateration(int a0, int a1, int a2, float* result_x, float* result_y) {
   float x1 = anchorsPos[a0][0], y1 = anchorsPos[a0][1];
   float x2 = anchorsPos[a1][0], y2 = anchorsPos[a1][1]; 
@@ -336,7 +337,7 @@ bool calculateTrilateration(int a0, int a1, int a2, float* result_x, float* resu
   return true;
 }
 
-// Estructura para definir zonas de interés
+// Structure to define interest zones
 #define NUM_ZONES 5 
 struct Zone {
   float x;
@@ -350,20 +351,20 @@ struct Zone {
 
 Zone zones[NUM_ZONES] = {
    //   x ,   y ,  r , inZone,lastEntry,minStay,flag
-   {  0.0,  9.0, 1.5, false, 0, 750,  false},   // Zona Norte
-   {  0.0, -2.0, 1.5, false, 0, 750,  false},   // Zona Sur
-   {  5.5,  4.0, 1.5, false, 0, 500,  false},   // Zona Este
-   { -5.5,  4.0, 1.5, false, 0, 500,  false},   // Zona Oeste
-   {  0.0,  4.0, 2.0, false, 0, 1000, false}    // Zona Central
+   {  0.0,  9.0, 1.5, false, 0, 750,  false},   // North zone
+   {  0.0, -2.0, 1.5, false, 0, 750,  false},   // South zone
+   {  5.5,  4.0, 1.5, false, 0, 500,  false},   // East zone
+   { -5.5,  4.0, 1.5, false, 0, 500,  false},   // West zone
+   {  0.0,  4.0, 2.0, false, 0, 1000, false}    // Central zone
 };
 
-// Variables para MQTT y Estado 
+// Variables for MQTT and State 
 unsigned long lastMqttReconnectAttempt = 0;
 unsigned long lastStatusUpdate = 0;
 const long statusUpdateInterval = 80; 
 String last_anchor_id = "N/A"; 
 
-// ===== SISTEMA DE BUFFERING =====
+// ===== SYSTEM BUFFERING =====
 struct StabilizedBuffer {
   float position_x_buffer[8];
   float position_y_buffer[8];
@@ -374,31 +375,31 @@ struct StabilizedBuffer {
   const unsigned long OUTPUT_INTERVAL = 80; 
 } stable_buffer;
 
-// ===== VARIABLES DE CONTROL DE FLUJO MQTT =====
+// ===== MQTT FLOW CONTROL VARIABLES =====
 struct MQTTFlowControl {
   unsigned long last_successful_send = 0;
   unsigned long last_connection_check = 0;
   int consecutive_failures = 0;
   bool flow_control_active = false;
-  const unsigned long CONNECTION_CHECK_INTERVAL = 1000; // Verificar conexión cada 1s
+  const unsigned long CONNECTION_CHECK_INTERVAL = 1000; // Check connection every 1s
   const int MAX_CONSECUTIVE_FAILURES = 3;
 } mqtt_flow;
 
-// HTML para la página web integrada 
+// HTML for the integrated web page 
 const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Monitor de Tag UWB</title>
+  <title>UWB Tag Monitor</title>
   <style>
     body { font-family: Arial; margin: 0; padding: 0; background: #f0f0f0; }
     .container { max-width: 800px; margin: 0 auto; padding: 20px; }
     h1 { color: #333; }
     .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .anchor { display: flex; justify-content: space-between; margin-bottom: 10px; }
-    /* Se eliminan estilos de batería */
+    /* Remove battery styles */
     button { background: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
     .status { color: #666; font-style: italic; }
     #visualization { height: 400px; width: 100%; max-width: 600px; position: relative; border: 1px solid #ccc; background: #fafafa; margin: 0 auto; }
@@ -424,31 +425,31 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 </head>
 <body>
   <div class="container">
-    <h1>Monitor de Tag UWB</h1>
+    <h1>UWB Tag Monitor</h1>
     
     <div class="card">
-      <h2>Anclajes</h2>
+      <h2>Anchors</h2>
       <div id="anchors-container"></div>
     </div>
     
     <div class="card">
-      <h2>Visualización</h2>
+      <h2>Visualization</h2>
       <div id="visualization"></div>
       <div style="margin-top: 10px;">
-        <p>Posición estimada: <span id="tag-position">Calculando...</span></p>
+        <p>Estimated position: <span id="tag-position">Calculating...</span></p>
       </div>
     </div>
     
-    <button onclick="requestUpdate()">Actualizar datos</button>
+    <button onclick="requestUpdate()">Update data</button>
   </div>
 
   <script>
     let lastUpdate = Date.now();
     let anchors = [];
-    let tagPosition = { x: 150, y: 150 }; // Posición actual en píxeles (se actualiza por animación)
-    let tagTarget   = { x: 150, y: 150 }; // Próximo destino recibido
+    let tagPosition = { x: 150, y: 150 }; // Current position in pixels (updated by animation)
+    let tagTarget   = { x: 150, y: 150 }; // Next destination received
 
-    // Variables de visualización (faltaban tras refactor)
+    // Visualization variables (missing after refactor)
     let visualizationInitialized = false;
     let vizElements = {
         container: null,
@@ -457,9 +458,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         distanceCircles: {},
         tagPoint: null
     };
-    let anchorListItems = {}; // Cache elementos DOM de anclas
+    let anchorListItems = {}; // Cache DOM elements of anchors
 
-    // Conexión WebSocket para recibir datos push en tiempo real
+    // WebSocket connection to receive real-time push data
     const socket = new WebSocket(`ws://${window.location.host}/ws`);
 
     socket.addEventListener('message', (evt) => {
@@ -471,12 +472,12 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       } catch (e) { console.error('WS parse error', e); }
     });
 
-    socket.addEventListener('open', () => console.log('[WS] conectado'));
-    socket.addEventListener('close', () => console.warn('[WS] cerrado'));
+    socket.addEventListener('open', () => console.log('[WS] connected'));
+    socket.addEventListener('close', () => console.warn('[WS] closed'));
 
-    // Animación continua a ~60 fps usando requestAnimationFrame
+    // Continuous animation at ~60 fps using requestAnimationFrame
     function animateTag() {
-      const lerp = 0.15; // Factor de interpolación (0-1)
+      const lerp = 0.15; // Interpolation factor (0-1)
       tagPosition.x += (tagTarget.x - tagPosition.x) * lerp;
       tagPosition.y += (tagTarget.y - tagPosition.y) * lerp;
 
@@ -488,76 +489,74 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     }
     requestAnimationFrame(animateTag);
 
-    // Obtener datos del ESP32
+    // Get data from ESP32
     function fetchData() {
       fetch('/data')
         .then(response => response.json())
         .then(data => {
-          window.currentTagPositionFromESP = data.position; // Almacenar posición del ESP
-          window.currentAnchorsData = data.anchors; // Almacenar datos de anclas por si renderVisualization los necesita directamente
-          updateUI(data); // Pasar todos los datos a updateUI
+          window.currentTagPositionFromESP = data.position; // Store ESP position
+          window.currentAnchorsData = data.anchors; // Store anchor data in case renderVisualization needs it directly
+          updateUI(data); // Pass all data to updateUI
           lastUpdate = Date.now();
         })
         .catch(error => {
           console.error('Error:', error);
-          document.getElementById('status').textContent = 'Error de conexión';
+          document.getElementById('status').textContent = 'Connection error';
         });
     }
     
-    // Actualizar la interfaz con los datos recibidos
+    // Update the interface with the received data
     function updateUI(data) {
-      // Actualizar anclajes data (usaremos window.currentAnchorsData o data.anchors)
-      anchors = data.anchors; // Mantenemos esto por si renderVisualization lo usa directamente
+      // Update anchor data (we'll use window.currentAnchorsData or data.anchors)
+      anchors = data.anchors; // Keep this for if renderVisualization uses it directly
 
-      // Depuración - mostrar distancias en consola
+      // Debug - show distances in console
       // console.log("Distancias recibidas (cm):", anchors.map(a => a.dist));
 
-      // --- Optimización: Actualizar lista de anclas sin recrear todo ---
+      // --- Optimization: Update anchor list without recreating everything ---
       const anchorsContainer = document.getElementById('anchors-container');
       let anchorsChanged = anchorsContainer.children.length !== anchors.length;
 
       anchors.forEach((anchor, i) => {
         let anchorDiv = anchorListItems[anchor.id];
         if (!anchorDiv) {
-          // Crear el div del ancla si no existe
+          // Create the anchor div if it doesn't exist
           anchorDiv = document.createElement('div');
           anchorDiv.className = 'anchor';
           anchorDiv.id = `anchor-list-item-${anchor.id}`;
           anchorDiv.innerHTML = `
             <div>
-              <strong>Anclaje ${anchor.id}</strong>
-              <p>Distancia: <span class="anchor-dist">${(anchor.dist / 100).toFixed(2)}</span> m</p>
+              <strong>Anchor ${anchor.id}</strong>
+              <p>Distance: <span class="anchor-dist">${(anchor.dist / 100).toFixed(2)}</span> m</p>
             </div>
             <div>
-              <p>Señal: <span class="anchor-rssi">${anchor.rssi.toFixed(1)}</span> dBm</p>
+              <p>Signal: <span class="anchor-rssi">${anchor.rssi.toFixed(1)}</span> dBm</p>
             </div>
           `;
           anchorsContainer.appendChild(anchorDiv);
-          anchorListItems[anchor.id] = anchorDiv; // Guardar referencia
+          anchorListItems[anchor.id] = anchorDiv; // Store reference
           anchorsChanged = true;
         } else {
-          // Actualizar datos si ya existe
+          // Update data if it already exists
           anchorDiv.querySelector('.anchor-dist').textContent = (anchor.dist / 100).toFixed(2);
           anchorDiv.querySelector('.anchor-rssi').textContent = anchor.rssi.toFixed(1);
         }
       });
-      // Podríamos añadir lógica para eliminar anclas si desaparecen, pero asumimos que son fijas
-      // --- Fin Optimización Lista Anclas ---
-
-      // Calcular posición del tag por trilateración (ahora usa datos del ESP)
-      // Ya no necesitamos la condición de anchors.length >=4 aquí si confiamos en data.position
-      calculateTagPosition(); // Esta función ahora usará window.currentTagPositionFromESP
+      // We could add logic to remove anchors if they disappear, but we assume they're fixed
+      // --- End Optimization Anchor List ---
+      // We don't need the anchors.length >=4 condition here if we trust data.position
+      calculateTagPosition(); // This function now uses window.currentTagPositionFromESP
       
-      // Actualizar visualización
+      // Update visualization
       renderVisualization();
       
-      // Actualizar estado
-      document.getElementById('status').textContent = 'Última actualización: ' + new Date().toLocaleTimeString();
+      // Update state
+      document.getElementById('status').textContent = 'Last update: ' + new Date().toLocaleTimeString(); 
     }
 
-    // Cálculo de posición por trilateración
+    // Calculation of position by trilateration
     function calculateTagPosition() {
-        // Configuración del espacio físico INDOOR 
+        // Physical space configuration INDOOR 
         const minX = -6.9;
         const maxX =  6.8;
         const minY = -3.5;
@@ -565,56 +564,54 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
         const areaWidth  = maxX - minX; // 13.7 m
         const areaHeight = maxY - minY; // 13.86 m
-        const scale = 40;        // 1m = 40px (ajuste optimizado para el contenedor web)
-        const margin = 15;       // margen en píxeles reducido
+        const scale = 40;        // 1m = 40px (optimized for web container)
+        const margin = 15;       // reduced margin in pixels
       
-        // Ancho y alto del área de visualización en píxeles
+        // Width and height of the visualization area in pixels
         const vizWidth = areaWidth * scale + 2 * margin;
         const vizHeight = areaHeight * scale + 2 * margin;
 
-        // Obtener la posición X, Y calculada por el ESP32 (que ya debería estar filtrada por Kalman si está activo en C++)
-        // Estos valores vienen de data.position.x y data.position.y en updateUI
-        // Necesitamos acceder a la variable 'data' globalmente o pasarla.
-        // Por simplicidad, asumiremos que 'currentData' es una variable global actualizada en fetchData.
-        // Sería mejor pasar 'data.position' como argumento a calculateTagPosition.
+        // Get the X, Y position calculated by the ESP32 (which should already be filtered by Kalman if active in C++)
+        // These values come from data.position.x and data.position.y in updateUI
+        // We need to access the 'data' variable globally or pass it.
+        // For simplicity, we assume that 'currentData' is a global variable updated in fetchData.
+        // It would be better to pass 'data.position' as an argument to calculateTagPosition.
         
-        // Para este ejemplo, vamos a necesitar que 'fetchData' almacene 'data.position' en una variable accesible.
-        // Modificaremos fetchData y updateUI ligeramente.
 
         if (!window.currentTagPositionFromESP) {
-            document.getElementById('tag-position').textContent = "Esperando datos del ESP...";
+            document.getElementById('tag-position').textContent = "Waiting for ESP data...";
             return;
         }
 
         let esp_x = window.currentTagPositionFromESP.x;
         let esp_y = window.currentTagPositionFromESP.y;
 
-        // Depuración: mostrar la posición recibida del ESP32
-        console.log("Posición RECIBIDA del ESP32 (metros):", esp_x, esp_y);
+        // Debug: show the received position from the ESP32
+        console.log("Received position from ESP32 (meters):", esp_x, esp_y);
               
         try {
-          // Limitar a los nuevos límites del hexágono irregular
+          // Limit to the new irregular hexagon limits
           const boundedX = Math.max(minX, Math.min(maxX, esp_x));
           const boundedY = Math.max(minY, Math.min(maxY, esp_y));
       
-          // Convertir a coordenadas de visualización
+          // Convert to visualization coordinates
           const pixelX = margin + (boundedX - minX) * scale;
           const pixelY = vizHeight - margin - (boundedY - minY) * scale;
       
-          // Actualizar objetivo para la animación fluida
+          // Update target for fluid animation
           tagTarget.x = pixelX;
           tagTarget.y = pixelY;
 
-          // Refrescar texto de posición
+          // Refresh position text
           document.getElementById('tag-position').textContent = 
-            `X: ${boundedX.toFixed(2)}m, Y: ${boundedY.toFixed(2)}m (ESP)`;
+            `X: ${boundedX.toFixed(2)}m, Y: ${boundedY.toFixed(2)}m (ESP32)`;
         } catch (e) {
-          console.error('Error en conversión de posición ESP:', e);
-          document.getElementById('tag-position').textContent = "Error de visualización";
+          console.error('Error in ESP position conversion:', e);
+          document.getElementById('tag-position').textContent = "Error in visualization";
         }
       }
     
-    // --- Optimización: Renderizar visualización actualizando elementos existentes ---
+    // --- Optimization: Render visualization updating existing elements ---
     function renderVisualization() {
       const viz = document.getElementById('visualization');
       if (!viz) return; 
@@ -639,9 +636,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         viz.style.height = vizHeight + 'px';
         viz.style.position = 'relative'; 
 
-        const currentAnchorsToRender = window.currentAnchorsData || anchors; // Usar datos actualizados
+        const currentAnchorsToRender = window.currentAnchorsData || anchors; // Use updated data
 
-        // Dibujar el perímetro real del hexágono mediante SVG
+        // Draw the real perimeter of the irregular hexagon using SVG
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("width", vizWidth);
         svg.setAttribute("height", vizHeight);
@@ -649,17 +646,17 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         svg.style.left = '0';
         svg.style.top  = '0';
 
-        // Vértices del hexágono en metros (en orden)
+        // Hexagon vertices in meters (in order)
         const hexVertices = [
           { x: -6.9, y: -2   }, // V1
-          { x: -1.6, y: 10.36}, // V2 (perímetro físico del campo)
+          { x: -1.6, y: 10.36}, // V2 (physical perimeter of the field)
           { x:  2.1, y: 10.36}, // V3
           { x:  6.8, y: -1.8 }, // V4
           { x:  0.0, y: -1.8 }, // V5
           { x: -0.4, y: -3.5 }  // V6
         ];
 
-        // Posiciones de anclas con IDs
+        // Anchor positions with IDs
         const anchorsPosMetros = [
           { id: 1, x: -6.0,  y: 0.0  },
           { id: 2, x: -2.6, y: 7.92},
@@ -668,7 +665,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           { id: 5, x:  0.0, y: -1.8 }
         ];
 
-        // Convertir a coordenadas de píxel con el mismo sistema que usamos para los anclajes
+        // Convert to pixel coordinates with the same system we use for anchors
         const pointsAttr = hexVertices.map(v => {
           const px = margin + (v.x - minX) * scale;
           const py = vizHeight - margin - (v.y - minY) * scale;
@@ -682,21 +679,19 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         polygon.setAttribute('fill', 'none');
         svg.appendChild(polygon);
         viz.appendChild(svg);
-        vizElements.border = polygon; // Guardamos referencia si hiciera falta
-
-        // Crear puntos de anclajes y círculos de distancia solo si hay datos de anclas
+        vizElements.border = polygon; // Store
         if (currentAnchorsToRender && currentAnchorsToRender.length > 0) {
             currentAnchorsToRender.forEach((anchorData, i) => {
                 const anchorCfg = anchorsPosMetros.find(a => a.id === anchorData.id);
-                if (!anchorCfg) return; // Si no hay configuración para este ID de ancla
+                if (!anchorCfg) return; // If there is no configuration for this anchor ID
 
                 const anchorPixelX = margin + (anchorCfg.x - minX) * scale;
                 const anchorPixelY = vizHeight - margin - (anchorCfg.y - minY) * scale;
 
                 const dot = document.createElement('div');
                 dot.className = 'anchor-point';
-                dot.textContent = anchorData.id; // Usar ID del ancla
-                dot.title = `Anclaje ${anchorData.id}`;
+                dot.textContent = anchorData.id; // Use anchor ID
+                dot.title = `Anchor ${anchorData.id}`;
                 dot.style.position = 'absolute'; 
                 dot.style.left = anchorPixelX + 'px';
                 dot.style.top = anchorPixelY + 'px';
@@ -709,7 +704,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 circle.style.position = 'absolute'; 
                 circle.style.left = anchorPixelX + 'px';
                 circle.style.top = anchorPixelY + 'px';
-                const radius = (anchorData.dist / 100) * scale; // Convertir cm a metros para visualización
+                const radius = (anchorData.dist / 100) * scale; // Convert to meters for visualization
                 circle.style.width = radius * 2 + 'px';
                 circle.style.height = radius * 2 + 'px';
                 circle.style.transform = 'translate(-50%, -50%)'; 
@@ -732,12 +727,12 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         const scale = 40; 
         const currentAnchorsToRender = window.currentAnchorsData || anchors;
 
-        // Actualizar círculos de distancia solo si hay datos de anclas
+        // Update distance circles only if there are anchor data
         if (currentAnchorsToRender && currentAnchorsToRender.length > 0) {
             currentAnchorsToRender.forEach((anchorData) => {
                 const circle = vizElements.distanceCircles[anchorData.id];
                 if (circle) {
-                    const radius = (anchorData.dist / 100) * scale; // Convertir cm a metros para actualización
+                    const radius = (anchorData.dist / 100) * scale; // Convert to meters for update
                     const currentWidth = parseFloat(circle.style.width) || 0;
                     if (radius >= 0 && Math.abs(radius * 2 - currentWidth) > 0.1) { 
                         circle.style.width = radius * 2 + 'px';
@@ -747,33 +742,31 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             });
         }
 
-        // Actualizar posición del tag (debe hacerse siempre si tagPoint existe)
+        // Update tag position (must be done always if tagPoint exists)
         const tagPoint = vizElements.tagPoint;
         if (tagPoint && typeof tagPosition.x === 'number' && typeof tagPosition.y === 'number' && !isNaN(tagPosition.x) && !isNaN(tagPosition.y)) {
-           console.log("Dibujando TAG en (píxeles):", tagPosition.x, tagPosition.y); // Para depuración
-           // Actualizar posición absoluta del tag
+           console.log("Drawing TAG in (pixels):", tagPosition.x, tagPosition.y); // For debugging
+           // Update absolute tag position
            tagPoint.style.left = tagPosition.x + 'px';
            tagPoint.style.top  = tagPosition.y + 'px';
-           // Mantener centrado el punto
+           // Keep the point centered
            tagPoint.style.transform = 'translate(-50%, -50%)';
         } else if (tagPoint) {
-           console.log("Posición de TAG inválida o tagPoint no listo:", tagPosition.x, tagPosition.y); // Para depuración
-           // Opcional: ocultar el tag si la posición no es válida, en lugar de dejarlo donde estaba
-           // tagPoint.style.transform = 'translate(-10000px, -10000px)'; 
+          console.log("Invalid TAG position or tagPoint not ready:", tagPosition.x, tagPosition.y); // For debugging
         }
       }
     }
-    // --- Fin Optimización Visualización ---
+    // --- End Optimization Visualization ---
 
-    // Solicitar actualización de datos
+    // Request data update
     function requestUpdate() {
       fetchData();
     }
     
-    // Primera carga en caso de que el WebSocket tarde en conectar
+    // First load in case the WebSocket takes a while to connect
     fetchData();
 
-    // Polling de respaldo cada 1 s solo si WS está cerrado
+    // Polling backup every 1 s only if WS is closed
     setInterval(() => {
       if (socket.readyState !== WebSocket.OPEN) fetchData();
     }, 1000);
@@ -782,9 +775,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
-// ===== FUNCIONES =====
+// ===== FUNCTIONS =====
 
-// Filtro de Kalman para distancias
+// Kalman filter for distances
 float kalmanFilterDistance(float measurement, int anchor_id) {
   kalman_dist[anchor_id][1] = kalman_dist[anchor_id][1] + kalman_dist_q;
   float k = kalman_dist[anchor_id][1] / (kalman_dist[anchor_id][1] + kalman_dist_r);
@@ -793,7 +786,7 @@ float kalmanFilterDistance(float measurement, int anchor_id) {
   return kalman_dist[anchor_id][0];
 }
 
-// Filtro de Kalman para posición 2D
+// Kalman filter for 2D position
 void kalmanFilterPosition(float measured_x, float measured_y) {
   kalman_p_x = kalman_p_x + kalman_q;
   kalman_p_y = kalman_p_y + kalman_q;
@@ -811,7 +804,7 @@ void kalmanFilterPosition(float measured_x, float measured_y) {
   tagPositionY = kalman_y;
 }
 
-// Configura la conexión WiFi
+// Configure WiFi connection
 void setupWiFi() {
   if (USE_AP_MODE) {
     Serial.print("Configuring WiFi mode AP...");
@@ -822,7 +815,7 @@ void setupWiFi() {
   } else {
     Serial.print("Configuring WiFi mode STA...");
     WiFi.mode(WIFI_STA);
-    // Desactivar Wi-Fi Power-Save para latencia mínima
+    // Disable Wi-Fi Power-Save for minimum latency
     esp_wifi_set_ps(WIFI_PS_NONE);
     WiFi.setSleep(false);
     Serial.println(" Done.");
@@ -844,15 +837,14 @@ void setupWiFi() {
       Serial.println(WiFi.localIP());
     } else {
       Serial.print("WiFi connection FAILED! Status: ");
-      Serial.println(WiFi.status()); // Print the specific failure status code
-      // WL_NO_SSID_AVAIL = 1, WL_CONNECT_FAILED = 3, WL_CONNECTION_LOST = 4, WL_DISCONNECTED = 6 etc.
+      Serial.println(WiFi.status());
     }
   }
 }
 
-// Genera los datos en formato JSON usando ArduinoJson
+// Generate data in JSON format using ArduinoJson
 String getDataJson() {
-  // Calcular el tamaño necesario para el JSON
+  // Calculate the necessary size for the JSON
   const int capacity = JSON_OBJECT_SIZE(4) + 
                        JSON_ARRAY_SIZE(NUM_ANCHORS) + 
                        NUM_ANCHORS * JSON_OBJECT_SIZE(3) + 
@@ -860,27 +852,27 @@ String getDataJson() {
                        JSON_OBJECT_SIZE(NUM_ANCHORS);
                        
   StaticJsonDocument<capacity> doc;
-  // Añadir datos de anclajes
+  // Add anchor data
   JsonArray anchorsArray = doc.createNestedArray("anchors");
   for (int i = 0; i < NUM_ANCHORS; i++) {
     JsonObject anchorObject = anchorsArray.createNestedObject();
     anchorObject["id"] = ID_PONG[i];
-    anchorObject["dist"] = isnan(anchor_distance[i]) || isinf(anchor_distance[i]) ? 0.0 : (anchor_distance[i] * 100); // Metros a cm para WebSocket
+    anchorObject["dist"] = isnan(anchor_distance[i]) || isinf(anchor_distance[i]) ? 0.0 : (anchor_distance[i] * 100); // Meters to cm for WebSocket
     anchorObject["rssi"] = isnan(pot_sig[i]) || isinf(pot_sig[i]) ? -100.0 : pot_sig[i];
   }
   
-  // Añadir posición del tag
+  // Add tag position
   JsonObject positionObject = doc.createNestedObject("position");
   positionObject["x"] = isnan(tagPositionX) || isinf(tagPositionX) ? 0.0 : tagPositionX;
   positionObject["y"] = isnan(tagPositionY) || isinf(tagPositionY) ? 0.0 : tagPositionY;
 
-  // Serializar JSON a String
+  // Serialize JSON to String
   String output;
   serializeJson(doc, output);
   return output;
 }
 
-// Configura el servidor web
+// Configure the web server
 void setupWebServer() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req){
     req->send_P(200, "text/html", INDEX_HTML);
@@ -891,16 +883,16 @@ void setupWebServer() {
 
   ws.onEvent([](AsyncWebSocket *s, AsyncWebSocketClient *c, AwsEventType t, void*, uint8_t*, size_t){
     if(t==WS_EVT_CONNECT){
-      Serial.printf("[WS] Cliente #%u conectado, IP %s\n", c->id(), c->remoteIP().toString().c_str());
+      Serial.printf("[WS] Client #%u connected, IP %s\n", c->id(), c->remoteIP().toString().c_str());
     }
   });
   server.addHandler(&ws);
   server.begin();
-  Serial.println("✓ AsyncWebServer + WebSocket iniciado en :80");
+  Serial.println("AsyncWebServer + WebSocket started on :80");
 }
 
 
-// Comprueba si el tag está dentro de alguna zona definida
+// Check if the tag is inside any defined zone
 void checkZones() {
   bool inAnyZone = false;
   
@@ -916,14 +908,14 @@ void checkZones() {
         zones[i].tagInside = true;
         zones[i].entryTime = millis();
         
-        Serial.print("Tag entró en zona ");
+        Serial.print("Tag entered zone ");
         Serial.println(i);
       }
       
       if (millis() - zones[i].entryTime >= zones[i].minStayTime && !zones[i].stayTimeReached) {
         zones[i].stayTimeReached = true;
         
-        Serial.print("Tiempo mínimo alcanzado en zona ");
+        Serial.print("Minimum time reached in zone ");
         Serial.println(i);
       }
     } else {
@@ -931,14 +923,14 @@ void checkZones() {
         zones[i].tagInside = false;
         zones[i].stayTimeReached = false;
         
-        Serial.print("Tag salió de zona ");
+        Serial.print("Tag left zone ");
         Serial.println(i);
       }
     }
   }
 }
 
-// --- Funciones MQTT --- 
+// --- MQTT FUNCTIONS --- 
 
 void reconnectMQTT() {
   // Loop until we're reconnected
@@ -967,79 +959,77 @@ void reconnectMQTT() {
 }
 
 void publishStatus() {
-   // BUFFERING ESTABILIZADO SIMPLIFICADO - 80ms fijo = 12.5 Hz
+   // STABILIZED BUFFERING SIMPLIFIED - 80ms fixed = 12.5 Hz
    static unsigned long lastPublish = 0;
    unsigned long currentTime = millis();
    
-   // Control de timing estricto - EXACTAMENTE cada 80ms
+   // Strict timing control - EXACTLY every 80ms
    if (currentTime - lastPublish < 80) {
-     return; // Salir inmediatamente si no ha pasado el tiempo
+     return; // Exit immediately if the time hasn't passed
    }
    
-   // Verificar conexión MQTT una sola vez por envío
+   // Verify MQTT connection once per send
    if (!client.connected()) {
-     Serial.println("[MQTT] Desconectado, saltando envío");
+     Serial.println("[MQTT] Disconnected, skipping send");
      return;
    }
    
-   // Actualizar timestamp ANTES de procesar para evitar overlaps
+   // Update timestamp BEFORE processing to avoid overlaps
    lastPublish = currentTime;
    
-   // Preparar JSON optimizado con validación mejorada
+   // Prepare optimized JSON with improved validation
    StaticJsonDocument<512> doc;
    doc["tag_id"] = TAG_ID;
    doc["last_anchor_id"] = last_anchor_id;
    doc["timestamp_ms"] = currentTime;
 
-   // POSICIÓN con validación NaN/Inf más robusta
+   // POSITION with more robust NaN/Inf validation
    JsonObject position = doc.createNestedObject("position");
    float safe_x = (isnan(tagPositionX) || isinf(tagPositionX)) ? 0.0 : tagPositionX;
    float safe_y = (isnan(tagPositionY) || isinf(tagPositionY)) ? 0.0 : tagPositionY;
    position["x"] = safe_x;
    position["y"] = safe_y;
 
-   // DISTANCIAS con validación estricta
+   // DISTANCES with strict validation
    JsonObject anchorDistances = doc.createNestedObject("anchor_distances");
    for (int i = 0; i < NUM_ANCHORS; i++) {
      String anchorKey = String(ID_PONG[i]);
      float dist = anchor_distance[i];
      
-     // Validación más estricta: 0.1-20m rango realista indoor
+     // More strict validation: 0.1-20m realistic indoor range
      if (isnan(dist) || isinf(dist) || dist < 0.1 || dist > 20.0) {
        dist = 0.0;
      }
      anchorDistances[anchorKey] = dist;
    }
 
-   // Serializar y enviar con manejo de errores mejorado
+   // Serialize and send with improved error handling
    char buffer[512];
    size_t n = serializeJson(doc, buffer);
 
    if (client.publish(status_topic, buffer, n)) {
-     // Éxito silencioso para no spam logs
-     static int successCount = 0;
-     if (++successCount % 125 == 0) { // Log cada ~10 segundos (125 * 80ms)
-       Serial.printf("[MQTT] %d mensajes enviados OK (12.5Hz estable)\n", successCount);
+     // Silent
+       Serial.printf("[MQTT] %d messages sent OK (12.5Hz stable)\n", successCount);
      }
    } else {
-     Serial.printf("[MQTT] Error enviando posición en timestamp %lu\n", currentTime);
+     Serial.printf("[MQTT] Error sending position at timestamp %lu\n", currentTime);
    }
 }
 
 void broadcastWebSocket(){
   static uint32_t lastWs=0;
   uint32_t now = millis();
-  if(now - lastWs < WS_SEND_INTERVAL_MS) return; // limitar a 30 fps
+  if(now - lastWs < WS_SEND_INTERVAL_MS) return; // limit to 30 fps
   String json = getDataJson();
   ws.textAll(json);
   lastWs = now;
 }
 
-// ===== FUNCIÓN DE BUFFERING ESTABILIZADO =====
+// ===== STABILIZED BUFFERING FUNCTION =====
 void addToStabilizedBuffer(float x, float y) {
   unsigned long currentTime = millis();
   
-  // Añadir al buffer circular
+  // Add to circular buffer
   stable_buffer.position_x_buffer[stable_buffer.buffer_head] = x;
   stable_buffer.position_y_buffer[stable_buffer.buffer_head] = y;
   stable_buffer.timestamp_buffer[stable_buffer.buffer_head] = currentTime;
@@ -1053,7 +1043,7 @@ void addToStabilizedBuffer(float x, float y) {
 bool getStabilizedPosition(float* x, float* y) {
   unsigned long currentTime = millis();
   
-  // Verificar si es momento de enviar
+  // Check if it's time to send
   if (currentTime - stable_buffer.last_output_time < stable_buffer.OUTPUT_INTERVAL) {
     return false;
   }
@@ -1062,13 +1052,13 @@ bool getStabilizedPosition(float* x, float* y) {
     return false;
   }
   
-  // Calcular posición promedio ponderada (más peso a datos recientes)
+  // Calculate weighted average position (more weight to recent data)
   float sum_x = 0, sum_y = 0, total_weight = 0;
   
   for (int i = 0; i < stable_buffer.buffer_count; i++) {
     int idx = (stable_buffer.buffer_head - 1 - i + 8) % 8;
     float age = currentTime - stable_buffer.timestamp_buffer[idx];
-    float weight = exp(-age / 200.0); // Decaimiento exponencial
+    float weight = exp(-age / 200.0); // Exponential decay
     
     sum_x += stable_buffer.position_x_buffer[idx] * weight;
     sum_y += stable_buffer.position_y_buffer[idx] * weight;
@@ -1085,11 +1075,11 @@ bool getStabilizedPosition(float* x, float* y) {
   return false;
 }
 
-// ===== CONTROL DE FLUJO MQTT MEJORADO =====
+// ===== IMPROVED MQTT FLOW CONTROL =====
 bool checkMQTTFlowControl() {
   unsigned long currentTime = millis();
   
-  // Verificar conexión periódicamente
+  // Verify connection periodically
   if (currentTime - mqtt_flow.last_connection_check > mqtt_flow.CONNECTION_CHECK_INTERVAL) {
     mqtt_flow.last_connection_check = currentTime;
     
@@ -1097,11 +1087,11 @@ bool checkMQTTFlowControl() {
       mqtt_flow.consecutive_failures++;
       if (mqtt_flow.consecutive_failures >= mqtt_flow.MAX_CONSECUTIVE_FAILURES) {
         mqtt_flow.flow_control_active = true;
-        Serial.println("[MQTT] Flow control activado por desconexión");
+        Serial.println("[MQTT] Flow control activated by disconnection");
       }
       return false;
     } else {
-      // Conexión OK, resetear contadores
+      // Connection OK, reset counters
       mqtt_flow.consecutive_failures = 0;
       mqtt_flow.flow_control_active = false;
     }
@@ -1112,9 +1102,7 @@ bool checkMQTTFlowControl() {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n=== UWB TAG with WiFi, Web Server, and SD Logging ===\n");
-  
-  // Desactivar Bluetooth para liberar CPU/RAM y reducir latencia
+  Serial.println("\n=== UWB TAG with WiFi, Web Server, and MQTT ===
   btStop();
   esp_bt_controller_disable();
   
@@ -1124,7 +1112,7 @@ void setup() {
   
   // Setup MQTT
   client.setServer(mqtt_server, mqtt_port);
-  snprintf(status_topic, sizeof(status_topic), "%s%d/status", "uwb/tag/", TAG_ID); // Construir topic de estado ej: uwb/tag/1/status
+  snprintf(status_topic, sizeof(status_topic), "%s%d/status", "uwb/tag/", TAG_ID); // Build status topic example: uwb/tag/1/status
   Serial.print("MQTT Status topic set to: ");
   Serial.println(status_topic);
 
@@ -1147,7 +1135,7 @@ void setup() {
 
   DW3000.init();
   DW3000.setupGPIO();
-  Serial.println("[INFO] DW3000 inicializado correctamente.");
+  Serial.println("[INFO] DW3000 initialized correctly.");
 
   DW3000.configureAsTX();
   DW3000.clearSystemStatus(); 
@@ -1157,8 +1145,8 @@ void setup() {
 }
 
 void loop() {
-  ws.cleanupClients(); // mantener clientes activos (no bloquea)
-  // server.handleClient();  // ya no se usa con AsyncWebServer
+  ws.cleanupClients(); // keep clients active (no blocks)
+  // server.handleClient();  // no used with AsyncWebServer
   
   // Handle MQTT Client
   if (!client.connected()) {
@@ -1169,7 +1157,7 @@ void loop() {
   unsigned long currentMillis = millis();
   
   if (!lowPowerMode && (currentMillis - lastActivityTime >= SLEEP_TIMEOUT)) {
-    Serial.println("Entrando en modo de bajo consumo...");
+    Serial.println("Entering low power mode...");
     lowPowerMode = true;
     updateInterval = 1000;
   }
@@ -1200,7 +1188,7 @@ void loop() {
           
           while (fin_de_com == 0) {
             if (waitingForResponse && ((millis() - timeoutStart) >= RESPONSE_TIMEOUT)) {
-              Serial.print("Timeout REFORZADO para ancla ID: "); 
+              Serial.print("Timeout REINFORCED for anchor ID: "); 
               Serial.println(ID_PONG[ii]);
 
               DW3000.softReset();
@@ -1210,7 +1198,7 @@ void loop() {
               DW3000.clearSystemStatus(); 
 
               anchor_distance[ii] = 0;
-              pot_sig[ii] = -120.0f; // Valor de dBm muy bajo para indicar mala calidad/sin señal
+              pot_sig[ii] = -120.0f; // Very low dBm to indicate bad quality/no signal
               anchor_responded[ii] = false;
               
               curr_stage = 0; 
@@ -1218,7 +1206,7 @@ void loop() {
               waitingForResponse = false; 
               fin_de_com = 1; 
               
-              Serial.println("[INFO] TAG DW3000 re-inicializado post-timeout.");
+              Serial.println("[INFO] TAG DW3000 re-initialized post-timeout.");
               break; 
             }
             
@@ -1235,28 +1223,25 @@ void loop() {
                 
               case 1:
                 if (rx_status = DW3000.receivedFrameSucc()) {
-                  DW3000.clearSystemStatus(); // Limpiar estado del sistema después de la recepción
+                  DW3000.clearSystemStatus(); // Clear system status after reception
                   if ((rx_status == 1) && (DW3000.getDestinationID() == ID_PONG[ii])) {
                     if (DW3000.ds_isErrorFrame()) {
                       Serial.println("[WARNING] Error frame detected! Reverting to stage 0.");
                       curr_stage = 0;
                       waitingForResponse = false;
-                      // No rompemos el while (fin_de_com), dejamos que intente de nuevo o timeoutee si el ancla sigue mal
+                      // We don't break the while (fin_de_com), we let it try again or timeout if the anchor is still bad
                     } else if ((DW3000.getDestinationID() != ID_PONG[ii])) {
-                      // Mensaje para otra ancla, ignorar y seguir esperando (o timeout)
-                      break; // Sale del switch, pero no del while, sigue esperando respuesta para ID_PONG[ii]
-                    } else if (DW3000.ds_getStage() != 2) {
-                      Serial.println("[WARNING] Stage incorrecto del ancla. Enviando error frame.");
+                      // Message
                       DW3000.ds_sendErrorFrame();
-                      curr_stage = 0; // Reiniciar protocolo para esta ancla
+                      curr_stage = 0; // Restart protocol for this anchor
                       waitingForResponse = false;
-                      // No rompemos el while (fin_de_com), dejamos que intente de nuevo o timeoutee
+                      // We don't break the while (fin_de_com), we let it try again or timeout if the anchor is still bad
                     } else {
                       curr_stage = 2;
                       waitingForResponse = false;
                     }
-                  } else { // rx_status != 1 O el ID no es el correcto
-                    Serial.print("[ERROR] Receiver Error (case 1) o ID incorrecto. RX_STATUS: ");
+                  } else { // rx_status != 1 or the ID is not correct
+                    Serial.print("[ERROR] Receiver Error (case 1) or incorrect ID. RX_STATUS: ");
                     Serial.print(rx_status);
                     Serial.print(", DEST_ID: ");
                     Serial.println(DW3000.getDestinationID());
@@ -1268,12 +1253,12 @@ void loop() {
                     DW3000.clearSystemStatus();
 
                     anchor_distance[ii] = 0;
-                    pot_sig[ii] = -120.0f; // Valor de dBm muy bajo para indicar mala calidad/sin señal
+                    pot_sig[ii] = -120.0f; // Very low dBm to indicate bad quality/no signal
                     anchor_responded[ii] = false;
                     curr_stage = 0;
                     waitingForResponse = false;
                     fin_de_com = 1; 
-                    Serial.println("[INFO] TAG DW3000 re-inicializado post-receiver error (case 1).");
+                    Serial.println("[INFO] TAG DW3000 re-initialized post-receiver error (case 1).");
                   }
                 }
                 break;
@@ -1291,13 +1276,13 @@ void loop() {
                 
               case 3:
                 if (rx_status = DW3000.receivedFrameSucc()) {
-                  DW3000.clearSystemStatus(); // Limpiar estado del sistema después de la recepción
-                  if (rx_status == 1) { // ASUMIMOS que el PONG no cambia el Destination ID para el último msg
+                  DW3000.clearSystemStatus(); // Clear system status after reception
+                  if (rx_status == 1) { // We assume that the PONG does not change the Destination ID for the last msg
                     if (DW3000.ds_isErrorFrame()) {
                       Serial.println("[WARNING] Error frame detected (case 3)! Reverting to stage 0.");
                       curr_stage = 0;
                       waitingForResponse = false;
-                      // No rompemos el while (fin_de_com)
+                      // We don't break the while (fin_de_com)
                     } else {
                       waitingForResponse = false;
                       clock_offset = DW3000.getRawClockOffset();
@@ -1314,12 +1299,12 @@ void loop() {
                     DW3000.clearSystemStatus();
 
                     anchor_distance[ii] = 0;
-                    pot_sig[ii] = -120.0f; // Valor de dBm muy bajo para indicar mala calidad/sin señal
+                    pot_sig[ii] = -120.0f; // Very low dBm to indicate bad quality/no signal
                     anchor_responded[ii] = false;
                     curr_stage = 0;
                     waitingForResponse = false;
                     fin_de_com = 1; 
-                    Serial.println("[INFO] TAG DW3000 re-inicializado post-receiver error (case 3).");
+                    Serial.println("[INFO] TAG DW3000 re-initialized post-receiver error (case 3).");
                   }
                 }
                 break;
@@ -1340,12 +1325,12 @@ void loop() {
                     pot_sig[ii] = -120.0f; 
                 }
  
-                // Formatear logs: TODO EN METROS para consistencia completa del sistema
+                // Format logs: TODO IN METERS for complete system consistency
                 dataString = String(TAG_ID) + "," +
                                   String(millis()) + "," +
                                   String(ID_PONG[ii]) + "," +
-                                  String(distance_meters, 4) + "," +       // Raw en metros (4 decimales)
-                                  String(anchor_distance[ii], 4) + "," +   // Filtrada en metros (4 decimales)
+                                  String(distance_meters, 4) + "," +       // Raw in meters (4 decimals)
+                                  String(anchor_distance[ii], 4) + "," +   // Filtered in meters (4 decimals)
                                   String(pot_sig[ii], 2) + "," +
                                   String(anchor_responded[ii] ? 1 : 0); 
                 
@@ -1368,9 +1353,9 @@ void loop() {
               }
                 
               default:
-                Serial.print("[ERROR] Estado desconocido (");
+                Serial.print("[ERROR] Unknown state (");
                 Serial.print(curr_stage);
-                Serial.println("). Volviendo a estado 0.");
+                Serial.println("). Returning to state 0.");
                 curr_stage = 0;
                 break;
             }
@@ -1385,15 +1370,15 @@ void loop() {
 
         // Only trilaterate if enough anchors responded
         if (responding_anchors >= 3) { 
-          // Calcular posición del tag usando trilateración inteligente 
+          // Calculate tag position using intelligent trilateration 
           
           float distances[NUM_ANCHORS];
           for (int i = 0; i < NUM_ANCHORS; i++) {
-            distances[i] = anchor_distance[i]; // Ya están en metros
+            distances[i] = anchor_distance[i]; // Already in meters
           }
 
 
-          // === Selección inteligente de 3 anclas para evitar degeneración ===
+          // === Intelligent selection of 3 anchors to avoid degeneration ===
           int responded_idx[NUM_ANCHORS];
           int r_count = 0;
           for (int i = 0; i < NUM_ANCHORS; i++) {
@@ -1403,7 +1388,7 @@ void loop() {
           }
 
           if (r_count >= 3) {
-            // === TRILATERACIÓN INTELIGENTE OPCIÓN A ===
+            // === INTELLIGENT TRILATERATION OPTION A ===
             int selected_anchors[3];
             bool selection_successful = selectOptimalAnchors(responded_idx, r_count, selected_anchors);
             
@@ -1413,8 +1398,8 @@ void loop() {
               a1 = selected_anchors[1]; 
               a2 = selected_anchors[2];
             } else {
-              // Fallback a método original si falla la selección inteligente
-              Serial.println("[TRILAT-A] Fallback a método básico");
+              // Fallback to original method if intelligent selection fails
+              Serial.println("[TRILAT-A] Fallback to basic method");
               float best_det = 0.0f;
               a0 = responded_idx[0]; a1 = responded_idx[1]; a2 = responded_idx[2];
               
@@ -1446,7 +1431,7 @@ void loop() {
             
             float r1 = distances[a0], r2 = distances[a1], r3 = distances[a2];
             
-            // Ecuaciones de trilateración básica
+            // Basic trilateration equations
             float A = 2 * (x2 - x1);
             float B = 2 * (y2 - y1);
             float C = r1*r1 - r2*r2 - x1*x1 + x2*x2 - y1*y1 + y2*y2;
@@ -1459,13 +1444,13 @@ void loop() {
               float x = (C * E - F * B) / det;
               float y = (A * F - D * C) / det;
               
-              // === LÍMITES SUAVES para evitar tirones bruscos ===
+              // === SMOOTH LIMITS to avoid sudden jerks ===
               float bounded_x = x;
               float bounded_y = y;
               
-              // Aplicar límites suaves con transición gradual
+              // Apply smooth limits with gradual transition
               if (x < -6.9f) {
-                bounded_x = -6.9f + (x + 6.9f) * 0.1f; // Reducir en 90% la extrapolación
+                bounded_x = -6.9f + (x + 6.9f) * 0.1f; // Reduce extrapolation by 90%
               } else if (x > 6.8f) {
                 bounded_x = 6.8f + (x - 6.8f) * 0.1f;
               }
@@ -1476,17 +1461,17 @@ void loop() {
                 bounded_y = 10.36f + (y - 10.36f) * 0.1f;
               }
               
-              // === APLICAR FILTRO KALMAN OBLIGATORIO ===
+              // === APPLY REQUIRED KALMAN FILTER ===
               kalmanFilterPosition(bounded_x, bounded_y);
               
-              // Actualizar timestamp y posición anterior
+              // Update previous timestamp and position
               last_trilateration_time = millis();
               last_valid_position[0] = tagPositionX;
               last_valid_position[1] = tagPositionY;
               
               checkZones();
             } else {
-              // Si determinante muy pequeño, mantener última posición válida
+              // If determinant is too small, keep last valid position
               if (millis() - last_trilateration_time < 2000) {
                 tagPositionX = last_valid_position[0];
                 tagPositionY = last_valid_position[1];
@@ -1496,11 +1481,11 @@ void loop() {
         }
         
         for (int i = 0; i < NUM_ANCHORS; i++) {
-          Serial.print("Anclaje ");
+          Serial.print("Anchor ");
           Serial.print(ID_PONG[i]);
           Serial.print(" ");
           Serial.print(anchor_distance[i], 3); 
-          Serial.print(" m, Potencia = ");
+          Serial.print(" m, Power = ");
           Serial.print(pot_sig[i]);
           Serial.println("dBm");
         }
