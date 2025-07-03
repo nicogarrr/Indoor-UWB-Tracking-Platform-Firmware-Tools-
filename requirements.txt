@@ -1,19 +1,18 @@
-# TFG UWB - Sistema GPS Indoor para Fútbol Sala
-# Dependencias esenciales para análisis de datos
+# TFG UWB - Indoor GPS System for Futsal
+# Essential dependencies for UWB data analysis and visualization
 
 # ===== CORE DATA PROCESSING =====
-pandas>=1.5.0
-numpy>=1.21.0
-scipy>=1.9.0
+pandas>=1.5.0          # Data manipulation and CSV handling
+numpy>=1.21.0           # Numerical computations and arrays
 
 # ===== MQTT CLIENT =====
-paho-mqtt>=1.6.0
+paho-mqtt>=1.6.0        # MQTT communication with UWB hardware
 
 # ===== VISUALIZATION =====
-matplotlib>=3.6.0
+matplotlib>=3.6.0       # Real-time plotting and animation
 
-# ===== MACHINE LEARNING (GPR en movement_replay.py) =====
-scikit-learn>=1.1.0
+# ===== MACHINE LEARNING =====
+scikit-learn>=1.1.0     # Gaussian Process Regression for trajectory prediction
 
 # ===== UTILITIES =====
 python-dateutil>=2.8.0
