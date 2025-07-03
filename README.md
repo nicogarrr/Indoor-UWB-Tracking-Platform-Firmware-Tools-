@@ -1,9 +1,9 @@
-UWB Indoor Localization System for Futsal
-==========================================
+# TFG-UWB: Indoor UWB Tracking Platform (Firmware & Tools)
 
-Introduction
-------------
-This project implements a high-precision indoor localization system based on **Ultra-Wideband (UWB)** technology with the DW3000 chip and **ESP32** boards. It is oriented towards capturing and analyzing movement in futsal, although it can be adapted to other sports or indoor environments.
+## Introduction
+This project implements a comprehensive **Ultra-Wideband (UWB) indoor tracking platform** featuring high-precision localization using DW3000 chips and ESP32 boards. Originally designed for futsal movement analysis, this platform can be adapted for various sports, robotics, and indoor positioning applications.
+
+The system provides both **firmware** for UWB devices and **analysis tools** for data processing and visualization.
 
 The system consists of the following main components:
 
@@ -46,10 +46,42 @@ TFG OFICIAL/
 
 Hardware Requirements
 --------------------
-* 6 **Makerfabs ESP32 UWB DW3000** boards (5 anchors + 1 tag).  
-* 2.4 GHz Wi-Fi router for MQTT transmission.  
-* Computer with Python 3.8 or higher for data analysis.  
-* Stable 5V power supply for anchors.
+
+### UWB Hardware (Makerfabs)
+This project is designed to work with **Makerfabs ESP32 UWB** boards. The following models are compatible:
+
+#### Current Hardware Used
+* 6x **[ESP32 UWB DW3000](https://www.makerfabs.com/esp32-uwb-dw3000.html)** boards (5 anchors + 1 tag)
+  - **Price**: $43.80 USD per unit
+  - **Chip**: DecaWave DW3000 (latest generation)
+  - **Advantages**: 66% lower power consumption vs DW1000, Apple U1 compatible, FiRa™ certified
+  - **Channels**: Supports UWB channels 5 (6.5 GHz) and 9 (8 GHz)
+  - **Range**: Standard indoor range (~30m)
+
+#### Alternative/Upgraded Options
+* **[ESP32 UWB Pro High Power 120m](https://www.makerfabs.com/esp32-uwb-high-power-120m.html)** (Recommended for larger areas)
+  - **Price**: $51.84 USD per unit (Special offer)
+  - **Extended Range**: Up to 120 meters
+  - **Better Performance**: Higher power output for challenging environments
+  - **Same Compatibility**: Works with existing firmware
+
+* **[ESP32 UWB Pro with Display](https://www.makerfabs.com/esp32-uwb-pro-with-display.html)**
+  - **Price**: $54.80 USD per unit
+  - **Features**: Built-in OLED display for real-time monitoring
+  - **Ideal for**: Development and debugging phases
+
+#### Technical Specifications
+- **ESP32**: Dual-core Xtensa 32-bit LX6 (80-240MHz)
+- **Memory**: 8MB PSRAM (64Mbit), 4MB Flash
+- **Connectivity**: WiFi 802.11b/g/n, Bluetooth v4.2
+- **Power**: Sleep mode <5µA, board supply 4.8-5.5V
+- **Temperature**: Operating range -40°C to +85°C
+- **Dimensions**: 18.0×31.4×3.3mm
+
+### Additional Requirements
+* 2.4 GHz Wi-Fi router for MQTT transmission  
+* Computer with Python 3.8 or higher for data analysis  
+* Stable 5V power supply for anchors (USB or external)
 
 Python Environment Setup
 ------------------------
@@ -95,6 +127,15 @@ Data Format
   * Columns: `Tag_ID,Timestamp_ms,Anchor_ID,Raw_Distance_m,Filtered_Distance_m,Signal_Power_dBm,Anchor_Status`
 * Positions: `uwb_positions_YYYYMMDD_HHMMSS.csv`  
   * Columns: `timestamp,tag_id,x,y,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist`
+
+Technical Resources
+------------------
+
+### Makerfabs Documentation & Support
+* **[ESP32 UWB DW3000 Wiki](https://wiki.makerfabs.com/)** - Official documentation and tutorials
+* **[GitHub Repository](https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000)** - Official firmware examples
+* **[DW3000 Datasheet](https://www.makerfabs.com/)** - Technical specifications from Qorvo/DecaWave
+* **[UWB Indoor Positioning Tests](https://www.makerfabs.com/)** - Performance benchmarks and calibration guides
 
 License
 -------
