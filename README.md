@@ -103,5 +103,5 @@ Este proyecto se distribuye con fines académicos para el Trabajo de Fin de Grad
 Contacto
 --------
 Autor: Nicolás Iglesias García  
-Correo: nico.iglesias@example.com  
+Correo: uo288336@uniovi.es
 Escuela Politécnica de Ingeniería de Gijón, Universidad de Oviedo
