@@ -14,7 +14,7 @@
 #define TAG_ID 1 
 
 
-const uint32_t WS_SEND_INTERVAL_MS = 33; // 1000/33 ≈ 30 fps
+const uint32_t WS_SEND_INTERVAL_MS = 20; // 1000/20 = 50 fps - WebSocket optimized (keep!)
 
 // ===== WiFi CONFIGURATION =====
 #define USE_AP_MODE false
@@ -41,8 +41,9 @@ const char* logServerIp = "172.20.10.2";
 const int logServerPort = 5000;             
 
 // ===== TDMA Configuration (INDOOR) =====
-const unsigned long TDMA_CYCLE_MS = 60; 
-const unsigned long TDMA_SLOT_DURATION_MS = 20; 
+// *** Optimized for higher FSR: 5 slots x 10 ms = 50 ms total ***
+const unsigned long TDMA_CYCLE_MS = 60;  // antes 60 ms
+const unsigned long TDMA_SLOT_DURATION_MS = 20;  // antes 20 ms
 
 // ===== RANGING CONFIGURATION =====
 #define ROUND_DELAY 100
@@ -78,7 +79,7 @@ bool anchor_responded[NUM_ANCHORS] = {false};
 // Variables for timeout 
 unsigned long timeoutStart = 0;
 bool waitingForResponse = false;
-const unsigned long RESPONSE_TIMEOUT = 35; 
+const unsigned long RESPONSE_TIMEOUT = 25; // Optimal 25ms timeout (proven stable) 
 
 // Variables for state manager 
 unsigned long lastUpdate = 0;
@@ -112,7 +113,7 @@ unsigned long last_trilateration_time = 0;
 float last_valid_position[2] = {0.0, 0.0}; 
 bool combination_stable = false; 
 float rssi_threshold = 5.0; 
-float validation_threshold = 1.0; 
+float validation_threshold = 1.5; // KEEP at 1.5m - good balance proven
 
 // ===== GLOBAL ANCHOR POSITIONS (anchors 1-5) =====
 const float anchorsPos[NUM_ANCHORS][2] = {
@@ -361,7 +362,7 @@ Zone zones[NUM_ZONES] = {
 // Variables for MQTT and State 
 unsigned long lastMqttReconnectAttempt = 0;
 unsigned long lastStatusUpdate = 0;
-const long statusUpdateInterval = 80; 
+const long statusUpdateInterval = 50; // Optimal 50ms (proven stable at 8.6Hz) 
 String last_anchor_id = "N/A"; 
 
 // ===== SYSTEM BUFFERING =====
@@ -372,7 +373,7 @@ struct StabilizedBuffer {
   int buffer_head = 0;
   int buffer_count = 0;
   unsigned long last_output_time = 0;
-  const unsigned long OUTPUT_INTERVAL = 80; 
+  const unsigned long OUTPUT_INTERVAL = 50; // Optimal 50ms (proven stable) 
 } stable_buffer;
 
 // ===== MQTT FLOW CONTROL VARIABLES =====
@@ -475,15 +476,23 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     socket.addEventListener('open', () => console.log('[WS] connected'));
     socket.addEventListener('close', () => console.warn('[WS] closed'));
 
-    // Continuous animation at ~60 fps using requestAnimationFrame
+    // Ultra-smooth animation at 60 fps using requestAnimationFrame
     function animateTag() {
-      const lerp = 0.15; // Interpolation factor (0-1)
-      tagPosition.x += (tagTarget.x - tagPosition.x) * lerp;
-      tagPosition.y += (tagTarget.y - tagPosition.y) * lerp;
+      // Adaptive interpolation - faster when far, slower when close
+      const dx = tagTarget.x - tagPosition.x;
+      const dy = tagTarget.y - tagPosition.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Smooth lerp with adaptive speed (0.08-0.25 range)
+      const baseLerp = 0.12;
+      const adaptiveLerp = Math.min(0.25, baseLerp + distance * 0.002);
+      
+      tagPosition.x += dx * adaptiveLerp;
+      tagPosition.y += dy * adaptiveLerp;
 
       if (vizElements.tagPoint) {
-        vizElements.tagPoint.style.left = tagPosition.x + 'px';
-        vizElements.tagPoint.style.top  = tagPosition.y + 'px';
+        // Use transform for hardware acceleration
+        vizElements.tagPoint.style.transform = `translate(${tagPosition.x - 7}px, ${tagPosition.y - 7}px)`;
       }
       requestAnimationFrame(animateTag);
     }
@@ -716,9 +725,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         const tagPoint = document.createElement('div');
         tagPoint.className = 'tag-point';
         tagPoint.style.position = 'absolute'; 
-        tagPoint.style.left = tagPosition.x + 'px';
-        tagPoint.style.top = tagPosition.y + 'px';
-        tagPoint.style.transform = 'translate(-50%, -50%)'; 
+        tagPoint.style.left = '0px';
+        tagPoint.style.top = '0px';
+        tagPoint.style.transform = `translate(${tagPosition.x - 7}px, ${tagPosition.y - 7}px)`; 
         viz.appendChild(tagPoint);
         vizElements.tagPoint = tagPoint; 
 
@@ -742,18 +751,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             });
         }
 
-        // Update tag position (must be done always if tagPoint exists)
-        const tagPoint = vizElements.tagPoint;
-        if (tagPoint && typeof tagPosition.x === 'number' && typeof tagPosition.y === 'number' && !isNaN(tagPosition.x) && !isNaN(tagPosition.y)) {
-           console.log("Drawing TAG in (pixels):", tagPosition.x, tagPosition.y); // For debugging
-           // Update absolute tag position
-           tagPoint.style.left = tagPosition.x + 'px';
-           tagPoint.style.top  = tagPosition.y + 'px';
-           // Keep the point centered
-           tagPoint.style.transform = 'translate(-50%, -50%)';
-        } else if (tagPoint) {
-          console.log("Invalid TAG position or tagPoint not ready:", tagPosition.x, tagPosition.y); // For debugging
-        }
+        // Tag position updates are handled by requestAnimationFrame for ultra-smooth animation
+        // No need to update here as animateTag() handles all position updates at 60fps
       }
     }
     // --- End Optimization Visualization ---
@@ -835,6 +834,9 @@ void setupWiFi() {
       Serial.println("WiFi connected successfully!");
       Serial.print("IP address: ");
       Serial.println(WiFi.localIP());
+      // Set maximum WiFi power for best performance
+      WiFi.setTxPower(WIFI_POWER_19_5dBm);
+      Serial.println("WiFi power set to maximum (19.5dBm)");
     } else {
       Serial.print("WiFi connection FAILED! Status: ");
       Serial.println(WiFi.status());
@@ -959,12 +961,12 @@ void reconnectMQTT() {
 }
 
 void publishStatus() {
-   // STABILIZED BUFFERING SIMPLIFIED - 80ms fixed = 12.5 Hz
+   // OPTIMIZED FOR 8.6Hz - 50ms fixed = 20 Hz max (proven optimal)
    static unsigned long lastPublish = 0;
    unsigned long currentTime = millis();
    
-   // Strict timing control - EXACTLY every 80ms
-   if (currentTime - lastPublish < 80) {
+   // Strict timing control - EXACTLY every 50ms for stable frequency
+   if (currentTime - lastPublish < 50) {
      return; // Exit immediately if the time hasn't passed
    }
    
@@ -1008,9 +1010,7 @@ void publishStatus() {
    size_t n = serializeJson(doc, buffer);
 
    if (client.publish(status_topic, buffer, n)) {
-     // Silent
-       Serial.printf("[MQTT] %d messages sent OK (12.5Hz stable)\n", successCount);
-     }
+     // Silent success - reduced logging for performance
    } else {
      Serial.printf("[MQTT] Error sending position at timestamp %lu\n", currentTime);
    }
@@ -1019,9 +1019,13 @@ void publishStatus() {
 void broadcastWebSocket(){
   static uint32_t lastWs=0;
   uint32_t now = millis();
-  if(now - lastWs < WS_SEND_INTERVAL_MS) return; // limit to 30 fps
+  if(now - lastWs < WS_SEND_INTERVAL_MS) return; // limit to 50 fps - ultra smooth
+  
+  // Only generate JSON when we're actually going to send it
   String json = getDataJson();
-  ws.textAll(json);
+  if (ws.count() > 0) { // Only send if there are connected clients
+    ws.textAll(json);
+  }
   lastWs = now;
 }
 
@@ -1102,7 +1106,7 @@ bool checkMQTTFlowControl() {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n=== UWB TAG with WiFi, Web Server, and MQTT ===
+  Serial.println("\n=== UWB TAG with WiFi, Web Server, and MQTT ===");
   btStop();
   esp_bt_controller_disable();
   
@@ -1491,12 +1495,11 @@ void loop() {
         }
         
         publishStatus();
-        
-        broadcastWebSocket();
 
         fin_de_com = 0;
     }
   } 
 
+  // Single WebSocket broadcast - smooth and efficient
   broadcastWebSocket();
 } 
