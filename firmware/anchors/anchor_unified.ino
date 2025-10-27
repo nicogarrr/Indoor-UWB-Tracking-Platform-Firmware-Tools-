@@ -316,6 +316,7 @@ void printPerformanceStats() {
   Serial.printf("Frames with error: %lu\n", stats.error_frames);
   Serial.printf("Timeouts: %lu\n", stats.timeouts);
   Serial.printf("Last activity: %lu ms ago\n", millis() - lastSuccessfulActivityTime);
+  Serial.printf("Uptime: %lu ms\n", uptime);
   Serial.println("================================\n");
 }
 
