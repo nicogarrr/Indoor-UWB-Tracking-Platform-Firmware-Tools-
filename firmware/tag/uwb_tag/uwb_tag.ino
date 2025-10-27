@@ -1327,7 +1327,26 @@ void loop() {
                 pot_sig[ii] = DW3000.getSignalStrength();
 
                 anchor_responded[ii] = true; 
-                if (distance_meters > 0) { 
+                
+                // === VALIDACIÓN ROBUSTA DE RANGOS: NaN, Inf y físicos ===
+                bool is_valid_distance = false;
+                
+                if (isnan(distance_meters) || isinf(distance_meters)) {
+                    Serial.printf("[VALID] Anchor %d: Invalid distance (NaN/Inf) - %.2f\n", ID_PONG[ii], distance_meters);
+                    distance_meters = 0;
+                } else if (distance_meters < 0.01f) {
+                    // Rango demasiado corto (probable error de medición)
+                    Serial.printf("[VALID] Anchor %d: Distance too short - %.2f\n", ID_PONG[ii], distance_meters);
+                    distance_meters = 0;
+                } else if (distance_meters > 25.0f) {
+                    // Rango más allá del alcance máximo UWB en interior (∼25m)
+                    Serial.printf("[VALID] Anchor %d: Distance out of range - %.2fm\n", ID_PONG[ii], distance_meters);
+                    distance_meters = 0;
+                } else {
+                    is_valid_distance = true;
+                }
+                
+                if (is_valid_distance) {
                     anchor_distance[ii] = kalmanFilterDistance(distance_meters, ii); 
                 } else {
                     anchor_distance[ii] = 0; 

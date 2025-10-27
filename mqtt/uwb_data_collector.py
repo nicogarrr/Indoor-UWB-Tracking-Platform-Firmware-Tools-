@@ -335,11 +335,12 @@ class UWBDataCollector:
             # Connect
             self.client.connect(self.mqtt_server, self.mqtt_port, MQTT_KEEPALIVE)
             
-            # Handler for Ctrl+C
+            # Handler for Ctrl+C - marca flag para salir limpio
+            shutdown_flag = [False]
+            
             def signal_handler(sig, frame):
-                print(f"\nStopping collector...")
-                self.cleanup()
-                sys.exit(0)
+                print(f"\n\n=== RECEIVED SHUTDOWN SIGNAL (Ctrl+C) ===")
+                shutdown_flag[0] = True
             
             signal.signal(signal.SIGINT, signal_handler)
             
@@ -350,20 +351,25 @@ class UWBDataCollector:
             last_stats = time.time()
             self.client.loop_start()
             
-            while True:
-                time.sleep(MQTT_LOOP_TIMEOUT)
-                
-                # Stats every 30 seconds
-                if time.time() - last_stats > 30:
-                    self.print_statistics()
-                    last_stats = time.time()
+            # Loop modificado para respetar shutdown_flag
+            try:
+                while not shutdown_flag[0]:
+                    time.sleep(MQTT_LOOP_TIMEOUT)
                     
+                    # Stats every 30 seconds
+                    if time.time() - last_stats > 30:
+                        self.print_statistics()
+                        last_stats = time.time()
+            except KeyboardInterrupt:
+                print("\nKeyboardInterrupt caught")
+            
             return True
             
         except Exception as e:
             print(f"Error in collector: {e}")
             return False
         finally:
+            # GUARANTÍA: Siempre ejecutar cleanup incluso con Ctrl+C
             self.cleanup()
 
     def cleanup(self):
