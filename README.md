@@ -102,10 +102,16 @@ Firmware Programming
 --------------------
 1. Install Arduino IDE 2.x and add the **ESP32** board package.  
 2. Select **ESP32 WROVER Module** board with PSRAM enabled.  
-3. Compile and upload the following firmware:
+3. **Configure WiFi credentials (IMPORTANT for uwb_tag.ino):**
+   ```bash
+   cd firmware/tag/uwb_tag/
+   cp config_wifi.h.example config_wifi.h
+   # Edit config_wifi.h with your actual WiFi credentials
+   ```
+4. Compile and upload the following firmware:
    * `firmware/anchors/anchor_X.ino` (change `X` to 1-5 according to anchor).  
    * `firmware/tag/uwb_tag.ino` for the mobile tag.
-4. Configure Wi-Fi network parameters in each file and, if necessary, the anchor identifier (`ID_PONG`).
+5. Verify anchor identifiers (`ID_PONG`) in each anchor file (must be unique: 1, 2, 3, 4, 5).
 
 System Usage
 ------------

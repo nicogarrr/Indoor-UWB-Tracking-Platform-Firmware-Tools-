@@ -5,6 +5,9 @@ common/secrets.h
 secrets.h
 *.credentials
 *.env.local
+# Configuración WiFi con credenciales reales
+config_wifi.h
+**/config_wifi.h
 
 # ===== PYTHON =====
 __pycache__/

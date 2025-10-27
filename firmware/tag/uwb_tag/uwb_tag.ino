@@ -17,11 +17,22 @@
 const uint32_t WS_SEND_INTERVAL_MS = 20; // 1000/20 = 50 fps - WebSocket optimized (keep!)
 
 // ===== WiFi CONFIGURATION =====
+// IMPORTANTE: Crea config_wifi.h desde config_wifi.h.example
+// y configura tus credenciales allí (no versiona ese archivo)
+#ifndef CONFIG_WIFI_H
+// Fallback si no existe config_wifi.h (solo para desarrollo)
 #define USE_AP_MODE false
 #define AP_SSID "UWB_TAG_AP"
 #define AP_PASS "12345678"
-#define STA_SSID "iPhone de Nicolas"
-#define STA_PASS "12345678"
+#define STA_SSID "Your_WiFi_SSID"
+#define STA_PASS "Your_WiFi_Password"
+const char* mqtt_server = "192.168.1.100"; 
+const int mqtt_port = 1883;
+const char* logServerIp = "192.168.1.100"; 
+const int logServerPort = 5000;
+#else
+#include "config_wifi.h"
+#endif
 
 // Server configuration 
 #define HTTP_PORT 80
@@ -29,16 +40,10 @@ AsyncWebServer server(HTTP_PORT);
 AsyncWebSocket ws("/ws");
 
 // MQTT Configuration
-const char* mqtt_server = "172.20.10.2"; 
-const int mqtt_port = 1883;
 const char* log_topic = "uwb/tag/logs";       
 char status_topic[30];                      
 WiFiClient espClient;
-PubSubClient client(espClient);
-
-// ===== Configuration for WiFi Logging =====
-const char* logServerIp = "172.20.10.2"; 
-const int logServerPort = 5000;             
+PubSubClient client(espClient);             
 
 // ===== TDMA Configuration (INDOOR) =====
 // *** Optimized for higher FSR: 5 slots x 10 ms = 50 ms total ***

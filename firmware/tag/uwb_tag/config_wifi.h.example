@@ -1,0 +1,32 @@
+// ==============================================
+// WiFi Configuration Template
+// ==============================================
+// INSTRUCCIONES:
+// 1. Copia este archivo y renómbralo a "config_wifi.h"
+// 2. Reemplaza los valores con tus credenciales reales
+// 3. NO versiones config_wifi.h en Git (ya está en .gitignore)
+// ==============================================
+
+#ifndef CONFIG_WIFI_H
+#define CONFIG_WIFI_H
+
+// ===== WiFi AP Mode Configuration =====
+#define USE_AP_MODE false
+#define AP_SSID "UWB_TAG_AP"
+#define AP_PASS "your_ap_password_here"
+
+// ===== WiFi Station Mode Configuration =====
+// MODIFICA ESTOS VALORES CON TUS CREDENCIALES
+#define STA_SSID "Your_WiFi_SSID_Here"
+#define STA_PASS "Your_WiFi_Password_Here"
+
+// ===== MQTT Server Configuration =====
+const char* mqtt_server = "192.168.1.100";  // Cambia por la IP de tu broker MQTT
+const int mqtt_port = 1883;
+
+// ===== Log Server Configuration =====
+const char* logServerIp = "192.168.1.100";
+const int logServerPort = 5000;
+
+#endif // CONFIG_WIFI_H
+
