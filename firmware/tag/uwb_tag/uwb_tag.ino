@@ -20,7 +20,7 @@ const uint32_t WS_SEND_INTERVAL_MS = 20; // 1000/20 = 50 fps - WebSocket optimiz
 #define USE_AP_MODE false
 #define AP_SSID "UWB_TAG_AP"
 #define AP_PASS "12345678"
-#define STA_SSID "iPhone de Nicolas"
+#define STA_SSID "iPhone de Nico"
 #define STA_PASS "12345678"
 
 // Server configuration 
@@ -29,7 +29,7 @@ AsyncWebServer server(HTTP_PORT);
 AsyncWebSocket ws("/ws");
 
 // MQTT Configuration
-const char* mqtt_server = "172.20.10.2"; 
+const char* mqtt_server = "172.16.10.103"; 
 const int mqtt_port = 1883;
 const char* log_topic = "uwb/tag/logs";       
 char status_topic[30];                      
@@ -37,7 +37,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 // ===== Configuration for WiFi Logging =====
-const char* logServerIp = "172.20.10.2"; 
+const char* logServerIp = "172.16.10.103"; 
 const int logServerPort = 5000;             
 
 // ===== TDMA Configuration (INDOOR) =====
@@ -95,17 +95,20 @@ float kalman_dist[NUM_ANCHORS][2] = { {0} };
 float kalman_dist_q = 0.005; 
 float kalman_dist_r = 0.08; 
 
-// Variables for position 
+// Variables for position 3D (X, Y, Z con filtro de Kalman)
 float kalman_x = 0.0;
 float kalman_y = 0.0;
+float kalman_z = 1.5;  // Altura típica del tag (altura de jugador)
 float kalman_p_x = 1.0;
 float kalman_p_y = 1.0;
+float kalman_p_z = 1.0;
 float kalman_q = 0.01; 
 float kalman_r = 0.05; 
 
-// Variables for tag position
+// Variables for tag position (3D real, 2D proyección para visualización)
 float tagPositionX = 0.0;
 float tagPositionY = 0.0;
+float tagPositionZ = 1.5;
 
 // Variables for intelligent trilateration 
 int last_anchor_combination[3] = {0, 1, 2}; 
@@ -115,13 +118,15 @@ bool combination_stable = false;
 float rssi_threshold = 5.0; 
 float validation_threshold = 1.5; // KEEP at 1.5m - good balance proven
 
-// ===== GLOBAL ANCHOR POSITIONS (anchors 1-5) =====
-const float anchorsPos[NUM_ANCHORS][2] = {
-  {-6.0,  0.0},   // Anchor 1 (index 0) - West
-  {-2.6,  7.92},  // Anchor 2 (index 1) - Northwest 
-  { 2.1, 10.36},  // Anchor 3 (index 2) - Northeast
-  { 6.35, 0.0},   // Anchor 4 (index 3) - East 
-  { 0.0, -1.8}    // Anchor 5 (index 4) - South center
+// ===== GLOBAL ANCHOR POSITIONS (anchors 1-5) - RECTANGULAR AREA 5.51m x 8.35m =====
+// Configuración "Distribución Uniforme 3D" basada en ArXiv 2204.04508
+// 47% mejora en precisión vs configuración de esquinas
+const float anchorsPos[NUM_ANCHORS][3] = {
+  {0.0,   2.5,  2.5},    // Anchor 1 (index 0) - Left wall, lower-mid (MEDIUM height)
+  {0.0,   6.5,  3.0},    // Anchor 2 (index 1) - Left wall, upper (HIGH height)
+  {2.755, 8.35, 2.0},    // Anchor 3 (index 2) - Top wall, center (LOW height)
+  {5.51,  4.2,  2.5},    // Anchor 4 (index 3) - Right wall, center (MEDIUM height)
+  {2.755, 0.0,  3.0}     // Anchor 5 (index 4) - Bottom wall, center (HIGH height)
 };
 
 // ===== HELPER FUNCTIONS =====
@@ -267,6 +272,8 @@ bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
   }
   
   // === STEP 5: Re-selection if validation fails ===
+  // TEMPORAL: Desactivar validación para pruebas en mesa
+  validation_passed = true;
   if (!validation_passed && count >= 4) {
     Serial.printf("[TRILAT-A] Validation failed, max error=%.2fm in anchor %d, retrying...\n", 
                  max_error, getAnchorNumber(worst_anchor));
@@ -314,28 +321,88 @@ float calculateDeterminant(int a0, int a1, int a2) {
 }
 
 // Helper function for trilateration (uses global anchorsPos)
-bool calculateTrilateration(int a0, int a1, int a2, float* result_x, float* result_y) {
-  float x1 = anchorsPos[a0][0], y1 = anchorsPos[a0][1];
-  float x2 = anchorsPos[a1][0], y2 = anchorsPos[a1][1]; 
-  float x3 = anchorsPos[a2][0], y3 = anchorsPos[a2][1];
+// ===== TRILATERACIÓN 3D usando Mínimos Cuadrados =====
+// Basado en investigación UWB (ArXiv 2204.04508) para mejor precisión
+bool calculateTrilateration3D(float* result_x, float* result_y, float* result_z) {
+  // Usar hasta 5 anclas para mejor precisión (sobredeterminación)
+  int valid_anchors = 0;
+  for (int i = 0; i < NUM_ANCHORS; i++) {
+    if (anchor_distance[i] > 0.1 && anchor_distance[i] < 20.0) {
+      valid_anchors++;
+    }
+  }
   
-  float r1 = anchor_distance[a0]; 
-  float r2 = anchor_distance[a1]; 
-  float r3 = anchor_distance[a2]; 
+  if (valid_anchors < 3) return false; // Mínimo 3 anclas necesarias
   
-  float A = 2 * (x2 - x1);
-  float B = 2 * (y2 - y1);
-  float C = r1*r1 - r2*r2 - x1*x1 + x2*x2 - y1*y1 + y2*y2;
-  float D = 2 * (x3 - x2);
-  float E = 2 * (y3 - y2);
-  float F = r2*r2 - r3*r3 - x2*x2 + x3*x3 - y2*y2 + y3*y3;
+  // Sistema de ecuaciones lineales Ax = b (mínimos cuadrados)
+  // Usamos ancla 0 como referencia
+  float A[NUM_ANCHORS-1][3];
+  float b[NUM_ANCHORS-1];
   
-  float det = A * E - B * D;
-  if (fabs(det) < 0.0001) return false;
+  float x0 = anchorsPos[0][0], y0 = anchorsPos[0][1], z0 = anchorsPos[0][2];
+  float r0 = anchor_distance[0];
   
-  *result_x = (C * E - F * B) / det;
-  *result_y = (A * F - D * C) / det;
+  for (int i = 0; i < NUM_ANCHORS-1; i++) {
+    int anchor_idx = i + 1;
+    float xi = anchorsPos[anchor_idx][0];
+    float yi = anchorsPos[anchor_idx][1];
+    float zi = anchorsPos[anchor_idx][2];
+    float ri = anchor_distance[anchor_idx];
+    
+    A[i][0] = 2 * (x0 - xi);
+    A[i][1] = 2 * (y0 - yi);
+    A[i][2] = 2 * (z0 - zi);
+    
+    b[i] = r0*r0 - ri*ri - x0*x0 + xi*xi - y0*y0 + yi*yi - z0*z0 + zi*zi;
+  }
+  
+  // Resolver usando ecuaciones normales simplificadas (3x3)
+  // AT*A*x = AT*b
+  float ATA[3][3] = {{0}};
+  float ATb[3] = {0};
+  
+  for (int i = 0; i < NUM_ANCHORS-1; i++) {
+    for (int j = 0; j < 3; j++) {
+      ATb[j] += A[i][j] * b[i];
+      for (int k = 0; k < 3; k++) {
+        ATA[j][k] += A[i][j] * A[i][k];
+      }
+    }
+  }
+  
+  // Resolver sistema 3x3 (Eliminación de Gauss simplificada)
+  // Para robustez en ESP32, implementación básica
+  float det = ATA[0][0] * (ATA[1][1]*ATA[2][2] - ATA[1][2]*ATA[2][1]) -
+              ATA[0][1] * (ATA[1][0]*ATA[2][2] - ATA[1][2]*ATA[2][0]) +
+              ATA[0][2] * (ATA[1][0]*ATA[2][1] - ATA[1][1]*ATA[2][0]);
+  
+  if (fabs(det) < 0.0001) return false; // Sistema singular
+  
+  // Regla de Cramer (3x3)
+  float det_x = ATb[0] * (ATA[1][1]*ATA[2][2] - ATA[1][2]*ATA[2][1]) -
+                ATA[0][1] * (ATb[1]*ATA[2][2] - ATA[1][2]*ATb[2]) +
+                ATA[0][2] * (ATb[1]*ATA[2][1] - ATA[1][1]*ATb[2]);
+  
+  float det_y = ATA[0][0] * (ATb[1]*ATA[2][2] - ATA[1][2]*ATb[2]) -
+                ATb[0] * (ATA[1][0]*ATA[2][2] - ATA[1][2]*ATA[2][0]) +
+                ATA[0][2] * (ATA[1][0]*ATb[2] - ATb[1]*ATA[2][0]);
+  
+  float det_z = ATA[0][0] * (ATA[1][1]*ATb[2] - ATb[1]*ATA[2][1]) -
+                ATA[0][1] * (ATA[1][0]*ATb[2] - ATb[1]*ATA[2][0]) +
+                ATb[0] * (ATA[1][0]*ATA[2][1] - ATA[1][1]*ATA[2][0]);
+  
+  *result_x = det_x / det;
+  *result_y = det_y / det;
+  *result_z = det_z / det;
+  
   return true;
+}
+
+// Función legacy para compatibilidad (2D desde 3D)
+bool calculateTrilateration(int a0, int a1, int a2, float* result_x, float* result_y) {
+  float z;
+  bool success = calculateTrilateration3D(result_x, result_y, &z);
+  return success;
 }
 
 // Structure to define interest zones
@@ -352,11 +419,11 @@ struct Zone {
 
 Zone zones[NUM_ZONES] = {
    //   x ,   y ,  r , inZone,lastEntry,minStay,flag
-   {  0.0,  9.0, 1.5, false, 0, 750,  false},   // North zone
-   {  0.0, -2.0, 1.5, false, 0, 750,  false},   // South zone
-   {  5.5,  4.0, 1.5, false, 0, 500,  false},   // East zone
-   { -5.5,  4.0, 1.5, false, 0, 500,  false},   // West zone
-   {  0.0,  4.0, 2.0, false, 0, 1000, false}    // Central zone
+   {  2.755,  7.5, 1.5, false, 0, 750,  false},   // North zone
+   {  2.755,  0.8, 1.5, false, 0, 750,  false},   // South zone
+   {  5.0,  4.175, 1.5, false, 0, 500,  false},   // East zone
+   {  0.5,  4.175, 1.5, false, 0, 500,  false},   // West zone
+   {  2.755,  4.175, 2.0, false, 0, 1000, false}  // Central zone
 };
 
 // Variables for MQTT and State 
@@ -565,16 +632,16 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
     // Calculation of position by trilateration
     function calculateTagPosition() {
-        // Physical space configuration INDOOR 
-        const minX = -6.9;
-        const maxX =  6.8;
-        const minY = -3.5;
-        const maxY = 10.36;
+        // Physical space configuration - RECTANGULAR AREA 5.51m x 8.35m
+        const minX = 0.0;
+        const maxX = 5.51;
+        const minY = 0.0;
+        const maxY = 8.35;
 
-        const areaWidth  = maxX - minX; // 13.7 m
-        const areaHeight = maxY - minY; // 13.86 m
-        const scale = 40;        // 1m = 40px (optimized for web container)
-        const margin = 15;       // reduced margin in pixels
+        const areaWidth  = maxX - minX; // 5.51 m
+        const areaHeight = maxY - minY; // 8.35 m
+        const scale = 60;        // 1m = 60px (optimized for rectangular area)
+        const margin = 20;       // margin in pixels
       
         // Width and height of the visualization area in pixels
         const vizWidth = areaWidth * scale + 2 * margin;
@@ -629,15 +696,15 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         vizElements.container = viz;
         viz.innerHTML = ''; 
 
-        const minX = -6.9;
-        const maxX =  6.8;
-        const minY = -3.5;
-        const maxY = 10.36;
+        const minX = 0.0;
+        const maxX = 5.51;
+        const minY = 0.0;
+        const maxY = 8.35;
 
-        const areaWidth  = maxX - minX; // 13.7 m
-        const areaHeight = maxY - minY; // 13.86 m
-        const scale = 40;        
-        const margin = 15;       
+        const areaWidth  = maxX - minX; // 5.51 m
+        const areaHeight = maxY - minY; // 8.35 m
+        const scale = 60;        
+        const margin = 20;       
         const vizWidth = areaWidth * scale + 2 * margin;
         const vizHeight = areaHeight * scale + 2 * margin;
 
@@ -647,7 +714,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
         const currentAnchorsToRender = window.currentAnchorsData || anchors; // Use updated data
 
-        // Draw the real perimeter of the irregular hexagon using SVG
+        // Draw the rectangular perimeter using SVG
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("width", vizWidth);
         svg.setAttribute("height", vizHeight);
@@ -655,23 +722,21 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         svg.style.left = '0';
         svg.style.top  = '0';
 
-        // Hexagon vertices in meters (in order)
+        // Rectangle vertices in meters (clockwise from bottom-left)
         const hexVertices = [
-          { x: -6.9, y: -2   }, // V1
-          { x: -1.6, y: 10.36}, // V2 (physical perimeter of the field)
-          { x:  2.1, y: 10.36}, // V3
-          { x:  6.8, y: -1.8 }, // V4
-          { x:  0.0, y: -1.8 }, // V5
-          { x: -0.4, y: -3.5 }  // V6
+          { x: 0.0,  y: 0.0  },  // V1 - Bottom-left
+          { x: 5.51, y: 0.0  },  // V2 - Bottom-right
+          { x: 5.51, y: 8.35 },  // V3 - Top-right
+          { x: 0.0,  y: 8.35 }   // V4 - Top-left
         ];
 
-        // Anchor positions with IDs
+        // Anchor positions with IDs - "Elevated Crown" 4+1 configuration
         const anchorsPosMetros = [
-          { id: 1, x: -6.0,  y: 0.0  },
-          { id: 2, x: -2.6, y: 7.92},
-          { id: 3, x:  2.1, y: 10.36},
-          { id: 4, x:  6.35, y: 0.0 },
-          { id: 5, x:  0.0, y: -1.8 }
+          { id: 1, x: 0.0,   y: 2.5,  z: 2.5 },  // A1 - Left wall, lower-mid (MEDIUM)
+          { id: 2, x: 0.0,   y: 6.5,  z: 3.0 },  // A2 - Left wall, upper (HIGH)
+          { id: 3, x: 2.755, y: 8.35, z: 2.0 },  // A3 - Top wall, center (LOW)
+          { id: 4, x: 5.51,  y: 4.2,  z: 2.5 },  // A4 - Right wall, center (MEDIUM)
+          { id: 5, x: 2.755, y: 0.0,  z: 3.0 }   // A5 - Bottom wall, center (HIGH)
         ];
 
         // Convert to pixel coordinates with the same system we use for anchors
@@ -733,7 +798,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
         visualizationInitialized = true;
       } else {
-        const scale = 40; 
+        const scale = 60; 
         const currentAnchorsToRender = window.currentAnchorsData || anchors;
 
         // Update distance circles only if there are anchor data
@@ -785,22 +850,41 @@ float kalmanFilterDistance(float measurement, int anchor_id) {
   return kalman_dist[anchor_id][0];
 }
 
-// Kalman filter for 2D position
-void kalmanFilterPosition(float measured_x, float measured_y) {
+// Kalman filter for 3D position (X, Y, Z)
+// Proyección final a 2D para visualización
+void kalmanFilterPosition(float measured_x, float measured_y, float measured_z) {
+  // Actualización de la covarianza (proceso)
   kalman_p_x = kalman_p_x + kalman_q;
   kalman_p_y = kalman_p_y + kalman_q;
+  kalman_p_z = kalman_p_z + kalman_q;
   
+  // Ganancia de Kalman
   float k_x = kalman_p_x / (kalman_p_x + kalman_r);
   float k_y = kalman_p_y / (kalman_p_y + kalman_r);
+  float k_z = kalman_p_z / (kalman_p_z + kalman_r);
   
+  // Actualización del estado
   kalman_x = kalman_x + k_x * (measured_x - kalman_x);
   kalman_y = kalman_y + k_y * (measured_y - kalman_y);
+  kalman_z = kalman_z + k_z * (measured_z - kalman_z);
   
+  // Actualización de la covarianza (medición)
   kalman_p_x = (1 - k_x) * kalman_p_x;
   kalman_p_y = (1 - k_y) * kalman_p_y;
+  kalman_p_z = (1 - k_z) * kalman_p_z;
   
+  // Actualizar posición 3D del tag
   tagPositionX = kalman_x;
   tagPositionY = kalman_y;
+  tagPositionZ = kalman_z;
+  
+  // La proyección 2D se mantiene en X, Y para visualización
+  // El Z se usa internamente para mejor precisión 2D
+}
+
+// Función legacy para compatibilidad 2D
+void kalmanFilterPosition(float measured_x, float measured_y) {
+  kalmanFilterPosition(measured_x, measured_y, tagPositionZ); // Usar Z actual
 }
 
 // Configure WiFi connection
@@ -1429,44 +1513,38 @@ void loop() {
               }
             }
 
-            float x1 = anchorsPos[a0][0], y1 = anchorsPos[a0][1];
-            float x2 = anchorsPos[a1][0], y2 = anchorsPos[a1][1]; 
-            float x3 = anchorsPos[a2][0], y3 = anchorsPos[a2][1];
+            // === TRILATERACIÓN 3D con todas las anclas disponibles ===
+            float x, y, z;
+            bool success = calculateTrilateration3D(&x, &y, &z);
             
-            float r1 = distances[a0], r2 = distances[a1], r3 = distances[a2];
-            
-            // Basic trilateration equations
-            float A = 2 * (x2 - x1);
-            float B = 2 * (y2 - y1);
-            float C = r1*r1 - r2*r2 - x1*x1 + x2*x2 - y1*y1 + y2*y2;
-            float D = 2 * (x3 - x2);
-            float E = 2 * (y3 - y2);
-            float F = r2*r2 - r3*r3 - x2*x2 + x3*x3 - y2*y2 + y3*y3;
-            
-            float det = A * E - B * D;
-            if (abs(det) > 0.0001) {
-              float x = (C * E - F * B) / det;
-              float y = (A * F - D * C) / det;
-              
-              // === SMOOTH LIMITS to avoid sudden jerks ===
+            if (success) {
+              // === SMOOTH LIMITS to avoid sudden jerks - RECTANGULAR AREA ===
               float bounded_x = x;
               float bounded_y = y;
+              float bounded_z = z;
               
-              // Apply smooth limits with gradual transition
-              if (x < -6.9f) {
-                bounded_x = -6.9f + (x + 6.9f) * 0.1f; // Reduce extrapolation by 90%
-              } else if (x > 6.8f) {
-                bounded_x = 6.8f + (x - 6.8f) * 0.1f;
+              // Apply smooth limits with gradual transition (5.51m x 8.35m)
+              if (x < 0.0f) {
+                bounded_x = 0.0f + (x - 0.0f) * 0.1f; // Reduce extrapolation by 90%
+              } else if (x > 5.51f) {
+                bounded_x = 5.51f + (x - 5.51f) * 0.1f;
               }
               
-              if (y < -3.5f) {
-                bounded_y = -3.5f + (y + 3.5f) * 0.1f;
-              } else if (y > 10.36f) {
-                bounded_y = 10.36f + (y - 10.36f) * 0.1f;
+              if (y < 0.0f) {
+                bounded_y = 0.0f + (y - 0.0f) * 0.1f;
+              } else if (y > 8.35f) {
+                bounded_y = 8.35f + (y - 8.35f) * 0.1f;
               }
               
-              // === APPLY REQUIRED KALMAN FILTER ===
-              kalmanFilterPosition(bounded_x, bounded_y);
+              // Límites de altura (0m a 3.5m - altura típica de techo)
+              if (z < 0.0f) {
+                bounded_z = 0.0f + (z - 0.0f) * 0.1f;
+              } else if (z > 3.5f) {
+                bounded_z = 3.5f + (z - 3.5f) * 0.1f;
+              }
+              
+              // === APPLY 3D KALMAN FILTER ===
+              kalmanFilterPosition(bounded_x, bounded_y, bounded_z);
               
               // Update previous timestamp and position
               last_trilateration_time = millis();
@@ -1475,7 +1553,7 @@ void loop() {
               
               checkZones();
             } else {
-              // If determinant is too small, keep last valid position
+              // If trilateration fails, keep last valid position
               if (millis() - last_trilateration_time < 2000) {
                 tagPositionX = last_valid_position[0];
                 tagPositionY = last_valid_position[1];

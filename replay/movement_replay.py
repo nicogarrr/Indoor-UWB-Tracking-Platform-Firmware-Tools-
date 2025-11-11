@@ -631,27 +631,28 @@ class UWBHexagonReplaySystem:
         return positions_list[-1]
     
     def setup_plot(self):
-        """Configure the visualization of the indoor hexagonal area"""
+        """Configure the visualization of the rectangular indoor area"""
         # Create figure and axes
         self.fig, self.ax = plt.subplots(figsize=(18, 12))
 
         # Try to set window title (may fail on some backends)
         try:
             if hasattr(self.fig.canvas, 'manager') and self.fig.canvas.manager is not None:
-                self.fig.canvas.manager.set_window_title('UWB Replay System - Indoor Hexagon Area')
+                self.fig.canvas.manager.set_window_title('UWB Replay System - Indoor Rectangular Area')
         except Exception:
             pass
         
-        # ======================== HEXAGONAL AREA ========================
-        minX, maxX = -6.9, 6.8
-        minY, maxY = -3.5, 10.36
-        self.ax.set_xlim(minX - 1, maxX + 1)
-        self.ax.set_ylim(minY - 1, maxY + 1)
+        # ======================== RECTANGULAR AREA ========================
+        # Dimensions: 5.51m x 8.35m with origin at bottom-left corner
+        minX, maxX = 0, 5.51
+        minY, maxY = 0, 8.35
+        self.ax.set_xlim(minX - 0.5, maxX + 0.5)
+        self.ax.set_ylim(minY - 0.5, maxY + 0.5)
         self.ax.set_aspect('equal')
         self.ax.set_facecolor('#f8f8f8')
 
-        self.draw_hexagon_area()
-        self.draw_hexagon_anchors()
+        self.draw_rectangular_area()
+        self.draw_rectangular_anchors()
         
         # Configure dynamic elements
         self.setup_dynamic_elements()
@@ -663,38 +664,63 @@ class UWBHexagonReplaySystem:
     
 
     
-    def draw_hexagon_anchors(self):
-        """Draw UWB anchors in the indoor arrangement"""
+    def draw_rectangular_anchors(self):
+        """
+        Draw UWB anchors in "Uniform Distribution 3D" configuration
+        Basada en investigación ArXiv 2204.04508 - 47% mejora en precisión vs esquinas
+        - A1, A4: MEDIUM height (2.5m) - Distribución vertical alternada
+        - A2, A5: HIGH height (3.0m) - Mayor diversidad vertical
+        - A3: LOW height (2.0m) - Reduce VDOP
+        """
         anchors = {
-            'A1': (-6.0, 0.0, 'blue'),
-            'A2': (-2.6, 7.92, 'blue'),  
-            'A3': (2.1, 10.36, 'blue'),
-            'A4': (6.35, 0.0, 'blue'),
-            'A5': (0.0, -1.8, 'blue')
+            'A1': (0.0,   2.5,  2.5, 'blue',   'MEDIA'),    # Left wall, lower-mid
+            'A2': (0.0,   6.5,  3.0, 'green',  'ALTA'),     # Left wall, upper
+            'A3': (2.755, 8.35, 2.0, 'purple', 'BAJA'),     # Top wall, center
+            'A4': (5.51,  4.2,  2.5, 'blue',   'MEDIA'),    # Right wall, center
+            'A5': (2.755, 0.0,  3.0, 'green',  'ALTA')      # Bottom wall, center
         }
 
-        for anchor_id, (x, y, color) in anchors.items():
-            self.ax.plot(x, y, 's', color=color, markersize=10, zorder=5)
-            self.ax.text(x, y + 0.3, anchor_id, ha='center', va='bottom', fontsize=9, color='black')
+        for anchor_id, (x, y, z_height, color, height_label) in anchors.items():
+            # Marcador según altura
+            if height_label == 'ALTA':
+                marker = '^'  # Triángulo para altura alta
+                size = 12
+            elif height_label == 'BAJA':
+                marker = 'v'  # Triángulo invertido para altura baja
+                size = 11
+            else:
+                marker = 's'  # Cuadrado para altura media
+                size = 10
+            
+            self.ax.plot(x, y, marker, color=color, markersize=size, zorder=5, 
+                        markeredgecolor='black', markeredgewidth=1.5)
+            
+            # Label con información de altura
+            label_text = f'{anchor_id}\nZ={z_height}m'
+            self.ax.text(x, y + 0.3, label_text, ha='center', va='bottom', 
+                        fontsize=8, color='black', fontweight='bold')
     
-    def draw_hexagon_area(self):
-        """Draw the irregular hexagon perimeter with correctly ordered vertices"""
-        # Vertices in clockwise order starting from upper left
+    def draw_rectangular_area(self):
+        """Draw the rectangular perimeter (5.51m x 8.35m)"""
+        # Rectangle vertices (clockwise from bottom-left)
         verts = [
-            (-6.9, -2),      # Lower left vertex (corrected)
-            (-1.6, 10.36),   # Upper left vertex
-            (2.1, 10.36),    # Upper right vertex
-            (6.8, -1.8),     # Lower right vertex
-            (0, -1.8),       # Lower center vertex
-            (-0.4, -3.5)     # Lower extreme vertex
+            (0.0, 0.0),      # Bottom-left corner
+            (5.51, 0.0),     # Bottom-right corner
+            (5.51, 8.35),    # Top-right corner
+            (0.0, 8.35)      # Top-left corner
         ]
         poly = patches.Polygon(verts, closed=True, fill=False, edgecolor='orange', linewidth=3, alpha=0.8)
         self.ax.add_patch(poly)
         
-        # Add vertex labels for debug
+        # Add corner markers
         for i, (x, y) in enumerate(verts):
-            self.ax.plot(x, y, 'ro', markersize=6, alpha=0.7)
-            self.ax.text(x+0.2, y+0.2, f'V{i+1}', fontsize=8, color='red', alpha=0.8)
+            self.ax.plot(x, y, 'o', color='orange', markersize=6, alpha=0.7, zorder=4)
+        
+        # Add dimension labels
+        self.ax.text(2.755, -0.3, '5.51 m', ha='center', va='top', fontsize=10, 
+                    color='orange', fontweight='bold')
+        self.ax.text(-0.3, 4.175, '8.35 m', ha='right', va='center', fontsize=10, 
+                    color='orange', fontweight='bold', rotation=90)
     
     def setup_dynamic_elements(self):
         """Configure elements that change during the animation"""
@@ -782,25 +808,42 @@ class UWBHexagonReplaySystem:
         self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
         
     def get_player_zone(self, x, y):
-        """Determine the current player zone in the indoor hexagonal area"""
-        # === ZONES FOR INDOOR HEXAGONAL AREA ===
+        """Determine the current player zone in the rectangular indoor area (5.51m x 8.35m)"""
+        # === ZONES FOR RECTANGULAR AREA ===
         # Verify if it is within the valid area
-        if not (-6.9 <= x <= 6.8 and -3.5 <= y <= 10.36):
-            return "OUTSIDE THE AREA"
+        if not (0 <= x <= 5.51 and 0 <= y <= 8.35):
+            return "FUERA DE ÁREA"
         
-        # Specific zones for the indoor area
-        if y >= 8.0:
-            return "NORTH ZONE"
-        elif y <= -1.0:
-            return "SOUTH ZONE"
-        elif x >= 4.0:
-            return "EAST ZONE"
-        elif x <= -4.0:
-            return "WEST ZONE"
-        elif -2.0 <= x <= 2.0 and 2.0 <= y <= 6.0:
-            return "CENTER ZONE"
+        # Divide the rectangular area into strategic zones
+        # Y zones (vertical division - field length)
+        third_y = 8.35 / 3  # ~2.78m per zone
+        
+        # X zones (horizontal division - field width)
+        third_x = 5.51 / 3  # ~1.84m per zone
+        
+        # Determine vertical zone
+        if y >= 2 * third_y:
+            y_zone = "ZONA SUPERIOR"
+        elif y >= third_y:
+            y_zone = "ZONA MEDIA"
         else:
-            return "INDOOR AREA"
+            y_zone = "ZONA INFERIOR"
+        
+        # Determine horizontal zone
+        if x <= third_x:
+            x_zone = "IZQUIERDA"
+        elif x >= 2 * third_x:
+            x_zone = "DERECHA"
+        else:
+            x_zone = "CENTRO"
+        
+        # Combine zones
+        if x_zone == "CENTRO" and y_zone == "ZONA MEDIA":
+            return "CENTRO CAMPO"
+        elif x_zone == "CENTRO":
+            return y_zone
+        else:
+            return f"{y_zone} {x_zone}"
     
     def calculate_speed(self, frame_idx):
         """Calculate instantaneous speed with realistic limits"""
@@ -903,21 +946,24 @@ class UWBHexagonReplaySystem:
         self.current_zone.set_text(zone)
         
         # Cambiar color de la zona según el área
-        if "ÁREA" in zone:
+        if "FUERA" in zone:
             zone_color = 'red'
             zone_edge = 'yellow'
-        elif "DEFENSA" in zone:
-            zone_color = 'blue'
-            zone_edge = 'lightblue'
-        elif "ATAQUE" in zone:
+        elif "SUPERIOR" in zone:
             zone_color = 'orangered'
             zone_edge = 'orange'
-        elif "CENTRO" in zone or "MEDIO" in zone:
+        elif "INFERIOR" in zone:
+            zone_color = 'blue'
+            zone_edge = 'lightblue'
+        elif "CENTRO CAMPO" in zone:
             zone_color = 'green'
             zone_edge = 'lightgreen'
+        elif "MEDIA" in zone:
+            zone_color = 'darkgreen'
+            zone_edge = 'lightgreen'
         else:
-            zone_color = 'black'
-            zone_edge = 'yellow'
+            zone_color = 'purple'
+            zone_edge = 'violet'
         
         self.current_zone.set_bbox(dict(boxstyle='round,pad=0.5', 
                                       facecolor=zone_color, alpha=0.85,
