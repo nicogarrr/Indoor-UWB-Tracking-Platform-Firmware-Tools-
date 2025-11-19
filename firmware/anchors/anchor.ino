@@ -1,7 +1,7 @@
 #include "DW3000.h"
 
 // ===== CONFIGURATION OF ANCHOR =====
-static int ID_PONG = 5; // Unique ID of the anchor
+static int ID_PONG = 1; // Unique ID of the anchor (Cambiar esta linea en las 6 anclas)
 
 // ===== COMMUNICATION VARIABLES =====
 static int frame_buffer = 0;
@@ -42,7 +42,7 @@ void setup() {
   
   initializeDW3000();
   
-  Serial.println("> ANCHOR 5 OPTIMIZED - Double-sided PONG v2.0 <");
+  Serial.println("> ANCHOR 1 OPTIMIZED - Double-sided PONG v2.0 <");
   Serial.println("[INFO] Setup completed. Ready for ranging.");
   
   lastSuccessfulActivityTime = millis();
@@ -259,7 +259,7 @@ void printPerformanceStats() {
   float success_rate = stats.total_requests > 0 ? 
     (float)stats.successful_responses / stats.total_requests * 100.0 : 0.0;
   
-  Serial.println("\n=== ANCHOR 5 STATISTICS ===");
+  Serial.println("\n=== ANCHOR 1 STATISTICS ===");
   Serial.printf("Success rate: %.1f%%\n", success_rate);
   Serial.printf("Frames with error: %lu\n", stats.error_frames);
   Serial.printf("Timeouts: %lu\n", stats.timeouts);
