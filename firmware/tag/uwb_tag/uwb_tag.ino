@@ -98,22 +98,22 @@ float kalman_dist_r = 0.08;
 // Variables for position 
 float kalman_x = 0.0;
 float kalman_y = 0.0;
+float kalman_z = 0.0;
 float kalman_p_x = 1.0;
 float kalman_p_y = 1.0;
+float kalman_p_z = 1.0;
 float kalman_q = 0.01; 
 float kalman_r = 0.05; 
 
 // Variables for tag position
 float tagPositionX = 0.0;
 float tagPositionY = 0.0;
+float tagPositionZ = 0.0;
 
-// Variables for intelligent trilateration 
-int last_anchor_combination[3] = {0, 1, 2}; 
-unsigned long last_trilateration_time = 0;
-float last_valid_position[2] = {0.0, 0.0}; 
-bool combination_stable = false; 
-float rssi_threshold = 5.0; 
-float validation_threshold = 1.5; // KEEP at 1.5m - good balance proven
+// Variables for WLSQ
+unsigned long last_wlsq_time = 0;
+float last_valid_position_3d[3] = {0.0, 0.0, 0.0}; 
+
 
 // ===== GLOBAL ANCHOR POSITIONS (anchors 1-6) =====
 // Coordinates: X, Y, Z
@@ -138,207 +138,114 @@ int getAnchorNumber(int array_index) {
   return array_index + 1;
 }
 
-// ===== INTELLIGENT TRILATERATION =====
-bool selectOptimalAnchors(int* available_anchors, int count, int* selected) {
-  if (count < 3) return false;
-  
-  bool can_keep_previous = false;
-  if (combination_stable && (millis() - last_trilateration_time) < 2000) {
-    bool all_available = true;
-    float previous_avg_rssi = 0;
-    
-    for (int i = 0; i < 3; i++) {
-      bool found = false;
-      for (int j = 0; j < count; j++) {
-                 if (available_anchors[j] == last_anchor_combination[i]) {
-           previous_avg_rssi += pot_sig[last_anchor_combination[i]];
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        all_available = false;
-        break;
-      }
-    }
-    
-    if (all_available) {
-      previous_avg_rssi /= 3.0;
-      // Keep if the average RSSI is still good
-      if (previous_avg_rssi > -85.0) {
-        selected[0] = last_anchor_combination[0];
-        selected[1] = last_anchor_combination[1];
-        selected[2] = last_anchor_combination[2];
-        can_keep_previous = true;
-        Serial.printf("[TRILAT-A] Keeping previous: [%d,%d,%d], RSSI=%.1f\n", 
-                     getAnchorNumber(selected[0]), getAnchorNumber(selected[1]), getAnchorNumber(selected[2]), previous_avg_rssi);
-      }
+// ===== WLSQ ALGORITHM =====
+
+// Helper: Invert 4x4 Matrix (Gauss-Jordan)
+bool invertMatrix4x4(float A[4][4], float A_inv[4][4]) {
+  // Initialize A_inv as identity
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      A_inv[i][j] = (i == j) ? 1.0f : 0.0f;
     }
   }
-  
-  // === STEP 2: New selection by RSSI + geometry ===
-  if (!can_keep_previous) {
-    // Sort anchors by RSSI (best first)
-    int sorted_anchors[NUM_ANCHORS];
-    float sorted_rssi[NUM_ANCHORS];
-    
-         for (int i = 0; i < count; i++) {
-       sorted_anchors[i] = available_anchors[i];
-       sorted_rssi[i] = pot_sig[available_anchors[i]];
-     }
-    
-    // Bubble sort by descending RSSI
-    for (int i = 0; i < count - 1; i++) {
-      for (int j = 0; j < count - i - 1; j++) {
-        if (sorted_rssi[j] < sorted_rssi[j + 1]) {
-          // Swap RSSI
-          float temp_rssi = sorted_rssi[j];
-          sorted_rssi[j] = sorted_rssi[j + 1];
-          sorted_rssi[j + 1] = temp_rssi;
-          // Swap indices
-          int temp_anchor = sorted_anchors[j];
-          sorted_anchors[j] = sorted_anchors[j + 1];
-          sorted_anchors[j + 1] = temp_anchor;
+
+  // Gaussian elimination
+  for (int i = 0; i < 4; i++) {
+    // Find pivot
+    float pivot = A[i][i];
+    if (fabs(pivot) < 1e-6) return false; // Singular
+
+    // Normalize row i
+    for (int j = 0; j < 4; j++) {
+      A[i][j] /= pivot;
+      A_inv[i][j] /= pivot;
+    }
+
+    // Eliminate other rows
+    for (int k = 0; k < 4; k++) {
+      if (k != i) {
+        float factor = A[k][i];
+        for (int j = 0; j < 4; j++) {
+          A[k][j] -= factor * A[i][j];
+          A_inv[k][j] -= factor * A_inv[i][j];
         }
       }
     }
-    
-    // Initially take the 3 best by RSSI
-    selected[0] = sorted_anchors[0];
-    selected[1] = sorted_anchors[1];
-    selected[2] = sorted_anchors[2];
-    
-    // Verify geometry of this trio
-         float det = calculateDeterminant(selected[0], selected[1], selected[2]);
-    
-    // If geometry is bad, replace the worst RSSI with the next one
-    if (fabs(det) < 0.001 && count > 3) {
-      selected[2] = sorted_anchors[3]; // Replace the 3rd (worst RSSI of the trio) with the 4th
-      det = calculateDeterminant(selected[0], selected[1], selected[2]);
-      Serial.printf("[TRILAT-A] Replacing worst RSSI of the trio with the 4th: [%d,%d,%d\n", 
-                   getAnchorNumber(selected[0]), getAnchorNumber(selected[1]), getAnchorNumber(selected[2]));
-    }
-    
-    // Update stable combination
-    last_anchor_combination[0] = selected[0];
-    last_anchor_combination[1] = selected[1];
-    last_anchor_combination[2] = selected[2];
-    combination_stable = true;
-    
-    Serial.printf("[TRILAT-A] New selection: [%d,%d,%d], RSSI=[%.1f,%.1f,%.1f], Det=%.3f\n",
-                  getAnchorNumber(selected[0]), getAnchorNumber(selected[1]), getAnchorNumber(selected[2]),
-                  pot_sig[selected[0]], pot_sig[selected[1]], pot_sig[selected[2]], det);
   }
+  return true;
+}
+
+// Calculate Position using Weighted Least Squares (3D)
+bool calculateWLSQPosition(int* available_anchors, int count, float* x, float* y, float* z) {
+  if (count < 4) return false; // Need at least 4 anchors for 3D + R^2
+
+  // Matrices
+  // H: [count x 4]
+  // W: [count x count] (diagonal)
+  // Y: [count x 1]
+  // Solution theta = (H^T * W * H)^-1 * H^T * W * Y
+
+  // We will compute (H^T * W * H) [4x4] and (H^T * W * Y) [4x1] directly to save memory
   
-  // === STEP 3: Calculate provisional position ===
-  float test_x, test_y;
-  bool trilat_ok = calculateTrilateration(selected[0], selected[1], selected[2], &test_x, &test_y);
-  
-  if (!trilat_ok) return false;
-  
-  // === STEP 4: Validate with remaining anchors ===
-  bool validation_passed = true;
-  float max_error = 0;
-  int worst_anchor = -1;
-  
+  float H_T_W_H[4][4] = {0};
+  float H_T_W_Y[4] = {0};
+
   for (int i = 0; i < count; i++) {
-    int anchor_id = available_anchors[i];
+    int anchor_idx = available_anchors[i];
     
-    // Skip the 3 already used
-    if (anchor_id == selected[0] || anchor_id == selected[1] || anchor_id == selected[2]) {
-      continue;
-    }
+    float ax = anchorsPos[anchor_idx][0];
+    float ay = anchorsPos[anchor_idx][1];
+    float az = anchorsPos[anchor_idx][2];
+    float d = anchor_distance[anchor_idx];
+    float rssi = pot_sig[anchor_idx];
+
+    // Weight based on RSSI (simple model: stronger signal = higher weight)
+    // Map -90dBm to 0.1, -70dBm to 1.0
+    float weight = pow(10.0f, (rssi + 90.0f) / 20.0f); 
+    if (weight < 0.001f) weight = 0.001f;
+
+    // Row of H: [-2x, -2y, -2z, 1]
+    float h_row[4] = { -2.0f * ax, -2.0f * ay, -2.0f * az, 1.0f };
     
-    // Calculate expected distance vs measured
-    float expected_dist = sqrt(pow(test_x - anchorsPos[anchor_id][0], 2) + 
-                              pow(test_y - anchorsPos[anchor_id][1], 2));
-         float measured_dist = anchor_distance[anchor_id]; // Ya en metros
-    float error = fabs(expected_dist - measured_dist);
-    
-    if (error > max_error) {
-      max_error = error;
-      worst_anchor = anchor_id;
-    }
-    
-    if (error > validation_threshold) {
-      validation_passed = false;
-    }
-    
-    Serial.printf("[TRILAT-A] Validation anchor %d: expected=%.2fm, measured=%.2fm, error=%.2fm\n",
-                 getAnchorNumber(anchor_id), expected_dist, measured_dist, error);
-  }
-  
-  // === STEP 5: Re-selection if validation fails ===
-  if (!validation_passed && count >= 4) {
-    Serial.printf("[TRILAT-A] Validation failed, max error=%.2fm in anchor %d, retrying...\n", 
-                 max_error, getAnchorNumber(worst_anchor));
-    
-    // Try replacing the worst RSSI of the current trio with the one that failed validation
-    if (worst_anchor >= 0) {
-             // Find which of the trio has the worst RSSI
-       int worst_in_trio = selected[0];
-       float worst_rssi = pot_sig[selected[0]];
-       
-       for (int i = 1; i < 3; i++) {
-         if (pot_sig[selected[i]] < worst_rssi) {
-           worst_rssi = pot_sig[selected[i]];
-          worst_in_trio = selected[i];
-        }
+    // Element of Y: d^2 - (x^2 + y^2 + z^2)
+    float k_i = ax*ax + ay*ay + az*az;
+    float y_val = d*d - k_i;
+
+    // Accumulate H^T * W * H
+    for (int r = 0; r < 4; r++) {
+      for (int c = 0; c < 4; c++) {
+        H_T_W_H[r][c] += h_row[r] * weight * h_row[c];
       }
-      
-      // Replace
-      for (int i = 0; i < 3; i++) {
-        if (selected[i] == worst_in_trio) {
-          selected[i] = worst_anchor;
-          break;
-        }
-      }
-      
-      Serial.printf("[TRILAT-A] Replacement: anchor %d by %d\n", getAnchorNumber(worst_in_trio), getAnchorNumber(worst_anchor));
-      
-      // Update combination
-      last_anchor_combination[0] = selected[0];
-      last_anchor_combination[1] = selected[1];
-      last_anchor_combination[2] = selected[2];
+    }
+
+    // Accumulate H^T * W * Y
+    for (int r = 0; r < 4; r++) {
+      H_T_W_Y[r] += h_row[r] * weight * y_val;
     }
   }
-  
+
+  // Invert (H^T * W * H)
+  float H_T_W_H_inv[4][4];
+  if (!invertMatrix4x4(H_T_W_H, H_T_W_H_inv)) {
+    return false; // Matrix singular
+  }
+
+  // Calculate theta = H_T_W_H_inv * H_T_W_Y
+  float theta[4] = {0};
+  for (int r = 0; r < 4; r++) {
+    for (int c = 0; c < 4; c++) {
+      theta[r] += H_T_W_H_inv[r][c] * H_T_W_Y[c];
+    }
+  }
+
+  *x = theta[0];
+  *y = theta[1];
+  *z = theta[2];
+  // theta[3] is R^2, we can use it for validation if needed (x^2+y^2+z^2 ~ theta[3])
+
   return true;
 }
 
-// Helper function to calculate determinant (uses global anchorsPos)
-float calculateDeterminant(int a0, int a1, int a2) {
-  float A = 2 * (anchorsPos[a1][0] - anchorsPos[a0][0]);
-  float B = 2 * (anchorsPos[a1][1] - anchorsPos[a0][1]);
-  float D = 2 * (anchorsPos[a2][0] - anchorsPos[a1][0]);
-  float E = 2 * (anchorsPos[a2][1] - anchorsPos[a1][1]);
-  return A * E - B * D;
-}
-
-// Helper function for trilateration (uses global anchorsPos)
-bool calculateTrilateration(int a0, int a1, int a2, float* result_x, float* result_y) {
-  float x1 = anchorsPos[a0][0], y1 = anchorsPos[a0][1];
-  float x2 = anchorsPos[a1][0], y2 = anchorsPos[a1][1]; 
-  float x3 = anchorsPos[a2][0], y3 = anchorsPos[a2][1];
-  
-  float r1 = anchor_distance[a0]; 
-  float r2 = anchor_distance[a1]; 
-  float r3 = anchor_distance[a2]; 
-  
-  float A = 2 * (x2 - x1);
-  float B = 2 * (y2 - y1);
-  float C = r1*r1 - r2*r2 - x1*x1 + x2*x2 - y1*y1 + y2*y2;
-  float D = 2 * (x3 - x2);
-  float E = 2 * (y3 - y2);
-  float F = r2*r2 - r3*r3 - x2*x2 + x3*x3 - y2*y2 + y3*y3;
-  
-  float det = A * E - B * D;
-  if (fabs(det) < 0.0001) return false;
-  
-  *result_x = (C * E - F * B) / det;
-  *result_y = (A * F - D * C) / det;
-  return true;
-}
 
 // Structure to define interest zones
 #define NUM_ZONES 5 
@@ -786,22 +693,27 @@ float kalmanFilterDistance(float measurement, int anchor_id) {
   return kalman_dist[anchor_id][0];
 }
 
-// Kalman filter for 2D position
-void kalmanFilterPosition(float measured_x, float measured_y) {
+// Kalman filter for 3D position
+void kalmanFilterPosition3D(float measured_x, float measured_y, float measured_z) {
   kalman_p_x = kalman_p_x + kalman_q;
   kalman_p_y = kalman_p_y + kalman_q;
+  kalman_p_z = kalman_p_z + kalman_q;
   
   float k_x = kalman_p_x / (kalman_p_x + kalman_r);
   float k_y = kalman_p_y / (kalman_p_y + kalman_r);
+  float k_z = kalman_p_z / (kalman_p_z + kalman_r);
   
   kalman_x = kalman_x + k_x * (measured_x - kalman_x);
   kalman_y = kalman_y + k_y * (measured_y - kalman_y);
+  kalman_z = kalman_z + k_z * (measured_z - kalman_z);
   
   kalman_p_x = (1 - k_x) * kalman_p_x;
   kalman_p_y = (1 - k_y) * kalman_p_y;
+  kalman_p_z = (1 - k_z) * kalman_p_z;
   
   tagPositionX = kalman_x;
   tagPositionY = kalman_y;
+  tagPositionZ = kalman_z;
 }
 
 // Configure WiFi connection
@@ -868,6 +780,7 @@ String getDataJson() {
   JsonObject positionObject = doc.createNestedObject("position");
   positionObject["x"] = isnan(tagPositionX) || isinf(tagPositionX) ? 0.0 : tagPositionX;
   positionObject["y"] = isnan(tagPositionY) || isinf(tagPositionY) ? 0.0 : tagPositionY;
+  positionObject["z"] = isnan(tagPositionZ) || isinf(tagPositionZ) ? 0.0 : tagPositionZ;
 
   // Serialize JSON to String
   String output;
@@ -990,8 +903,10 @@ void publishStatus() {
    JsonObject position = doc.createNestedObject("position");
    float safe_x = (isnan(tagPositionX) || isinf(tagPositionX)) ? 0.0 : tagPositionX;
    float safe_y = (isnan(tagPositionY) || isinf(tagPositionY)) ? 0.0 : tagPositionY;
+   float safe_z = (isnan(tagPositionZ) || isinf(tagPositionZ)) ? 0.0 : tagPositionZ;
    position["x"] = safe_x;
    position["y"] = safe_y;
+   position["z"] = safe_z;
 
    // DISTANCES with strict validation
    JsonObject anchorDistances = doc.createNestedObject("anchor_distances");
@@ -1373,17 +1288,9 @@ void loop() {
           if(anchor_responded[k]) responding_anchors++;
         }
 
-        // Only trilaterate if enough anchors responded
-        if (responding_anchors >= 3) { 
-          // Calculate tag position using intelligent trilateration 
-          
-          float distances[NUM_ANCHORS];
-          for (int i = 0; i < NUM_ANCHORS; i++) {
-            distances[i] = anchor_distance[i]; // Already in meters
-          }
-
-
-          // === Intelligent selection of 3 anchors to avoid degeneration ===
+        // Only calculate position if enough anchors responded
+        if (responding_anchors >= 4) { 
+          // Collect available anchors
           int responded_idx[NUM_ANCHORS];
           int r_count = 0;
           for (int i = 0; i < NUM_ANCHORS; i++) {
@@ -1392,70 +1299,16 @@ void loop() {
             }
           }
 
-          if (r_count >= 3) {
-            // === INTELLIGENT TRILATERATION OPTION A ===
-            int selected_anchors[3];
-            bool selection_successful = selectOptimalAnchors(responded_idx, r_count, selected_anchors);
-            
-            int a0, a1, a2;
-            if (selection_successful) {
-              a0 = selected_anchors[0];
-              a1 = selected_anchors[1]; 
-              a2 = selected_anchors[2];
-            } else {
-              // Fallback to original method if intelligent selection fails
-              Serial.println("[TRILAT-A] Fallback to basic method");
-              float best_det = 0.0f;
-              a0 = responded_idx[0]; a1 = responded_idx[1]; a2 = responded_idx[2];
-              
-              for (int i = 0; i < r_count - 2; i++) {
-                for (int j = i + 1; j < r_count - 1; j++) {
-                  for (int k = j + 1; k < r_count; k++) {
-                    int ia = responded_idx[i];
-                    int ib = responded_idx[j];
-                    int ic = responded_idx[k];
-                    
-                    float A_tmp = 2 * (anchorsPos[ib][0] - anchorsPos[ia][0]);
-                    float B_tmp = 2 * (anchorsPos[ib][1] - anchorsPos[ia][1]);
-                    float D_tmp = 2 * (anchorsPos[ic][0] - anchorsPos[ib][0]);
-                    float E_tmp = 2 * (anchorsPos[ic][1] - anchorsPos[ib][1]);
-                    float det_tmp = A_tmp * E_tmp - B_tmp * D_tmp;
-                    
-                    if (fabs(det_tmp) > fabs(best_det)) {
-                      best_det = det_tmp;
-                      a0 = ia; a1 = ib; a2 = ic;
-                    }
-                  }
-                }
-              }
-            }
-
-            float x1 = anchorsPos[a0][0], y1 = anchorsPos[a0][1];
-            float x2 = anchorsPos[a1][0], y2 = anchorsPos[a1][1]; 
-            float x3 = anchorsPos[a2][0], y3 = anchorsPos[a2][1];
-            
-            float r1 = distances[a0], r2 = distances[a1], r3 = distances[a2];
-            
-            // Basic trilateration equations
-            float A = 2 * (x2 - x1);
-            float B = 2 * (y2 - y1);
-            float C = r1*r1 - r2*r2 - x1*x1 + x2*x2 - y1*y1 + y2*y2;
-            float D = 2 * (x3 - x2);
-            float E = 2 * (y3 - y2);
-            float F = r2*r2 - r3*r3 - x2*x2 + x3*x3 - y2*y2 + y3*y3;
-            
-            float det = A * E - B * D;
-            if (abs(det) > 0.0001) {
-              float x = (C * E - F * B) / det;
-              float y = (A * F - D * C) / det;
-              
+          float x, y, z;
+          if (calculateWLSQPosition(responded_idx, r_count, &x, &y, &z)) {
               // === SMOOTH LIMITS to avoid sudden jerks ===
               float bounded_x = x;
               float bounded_y = y;
+              float bounded_z = z;
               
               // Apply smooth limits with gradual transition (0.0 to 6.1)
               if (x < 0.0f) {
-                bounded_x = 0.0f + x * 0.1f; // Reduce extrapolation by 90%
+                bounded_x = 0.0f + x * 0.1f; 
               } else if (x > 6.1f) {
                 bounded_x = 6.1f + (x - 6.1f) * 0.1f;
               }
@@ -1466,24 +1319,36 @@ void loop() {
               } else if (y > 7.35f) {
                 bounded_y = 7.35f + (y - 7.35f) * 0.1f;
               }
+
+              // Apply smooth limits for Z (0.0 to 3.0m approx)
+              if (z < 0.0f) {
+                bounded_z = 0.0f + z * 0.1f;
+              } else if (z > 3.0f) {
+                bounded_z = 3.0f + (z - 3.0f) * 0.1f;
+              }
               
               // === APPLY REQUIRED KALMAN FILTER ===
-              kalmanFilterPosition(bounded_x, bounded_y);
+              kalmanFilterPosition3D(bounded_x, bounded_y, bounded_z);
               
               // Update previous timestamp and position
-              last_trilateration_time = millis();
-              last_valid_position[0] = tagPositionX;
-              last_valid_position[1] = tagPositionY;
+              last_wlsq_time = millis();
+              last_valid_position_3d[0] = tagPositionX;
+              last_valid_position_3d[1] = tagPositionY;
+              last_valid_position_3d[2] = tagPositionZ;
               
               checkZones();
-            } else {
-              // If determinant is too small, keep last valid position
-              if (millis() - last_trilateration_time < 2000) {
-                tagPositionX = last_valid_position[0];
-                tagPositionY = last_valid_position[1];
-              }
-            }
+          } else {
+             // WLSQ Failed (Singular matrix?)
+             Serial.println("[WLSQ] Matrix inversion failed");
           }
+        } else {
+           // Not enough anchors
+           if (millis() - last_wlsq_time < 2000) {
+             // Keep last known position for 2 seconds
+             tagPositionX = last_valid_position_3d[0];
+             tagPositionY = last_valid_position_3d[1];
+             tagPositionZ = last_valid_position_3d[2];
+           }
         }
         
         for (int i = 0; i < NUM_ANCHORS; i++) {
