@@ -20,7 +20,7 @@ const uint32_t WS_SEND_INTERVAL_MS = 20; // 1000/20 = 50 fps - WebSocket optimiz
 #define USE_AP_MODE false
 #define AP_SSID "UWB_TAG_AP"
 #define AP_PASS "12345678"
-#define STA_SSID "iPhone de Nicolas"
+#define STA_SSID "iPhone de Nico"
 #define STA_PASS "12345678"
 
 // Server configuration 
@@ -29,7 +29,7 @@ AsyncWebServer server(HTTP_PORT);
 AsyncWebSocket ws("/ws");
 
 // MQTT Configuration
-const char* mqtt_server = "172.20.10.2"; 
+const char* mqtt_server = "172.20.10.5"; 
 const int mqtt_port = 1883;
 const char* log_topic = "uwb/tag/logs";       
 char status_topic[30];                      
@@ -37,7 +37,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 // ===== Configuration for WiFi Logging =====
-const char* logServerIp = "172.20.10.2"; 
+const char* logServerIp = "172.20.10.5"; 
 const int logServerPort = 5000;             
 
 // ===== TDMA Configuration (INDOOR) =====
@@ -119,10 +119,10 @@ float last_valid_position_3d[3] = {0.0, 0.0, 0.0};
 // Coordinates: X, Y, Z
 const float anchorsPos[NUM_ANCHORS][3] = {
   {0.0,  2.0,  1.8},   // Anchor 1
-  {6.0,  6.0,  1.0},   // Anchor 2
+  {0.0,  6.0,  1.0},   // Anchor 2
   {3.10, 7.35, 1.8},   // Anchor 3
   {6.1,  3.75, 1.0},   // Anchor 4
-  {1.8,  3.75, 1.8},   // Anchor 5
+  {6.1,  1.8,  1.8},   // Anchor 5
   {3.3,  0.0,  1.0}    // Anchor 6
 };
 
@@ -247,26 +247,6 @@ bool calculateWLSQPosition(int* available_anchors, int count, float* x, float* y
 }
 
 
-// Structure to define interest zones
-#define NUM_ZONES 5 
-struct Zone {
-  float x;
-  float y;
-  float radius;
-  bool tagInside;
-  unsigned long entryTime;
-  unsigned long minStayTime;
-  bool stayTimeReached;
-};
-
-Zone zones[NUM_ZONES] = {
-   //   x ,   y ,  r , inZone,lastEntry,minStay,flag
-   {  0.0,  9.0, 1.5, false, 0, 750,  false},   // North zone
-   {  0.0, -2.0, 1.5, false, 0, 750,  false},   // South zone
-   {  5.5,  4.0, 1.5, false, 0, 500,  false},   // East zone
-   { -5.5,  4.0, 1.5, false, 0, 500,  false},   // West zone
-   {  0.0,  4.0, 2.0, false, 0, 1000, false}    // Central zone
-};
 
 // Variables for MQTT and State 
 unsigned long lastMqttReconnectAttempt = 0;
@@ -575,10 +555,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         // Anchor positions with IDs
         const anchorsPosMetros = [
           { id: 1, x: 0.0,  y: 2.0  },
-          { id: 2, x: 6.0,  y: 6.0  },
+          { id: 2, x: 0.0,  y: 6.0  },
           { id: 3, x: 3.10, y: 7.35 },
           { id: 4, x: 6.1,  y: 3.75 },
-          { id: 5, x: 1.8,  y: 3.75 },
+          { id: 5, x: 6.1,  y: 1.8  },
           { id: 6, x: 3.3,  y: 0.0  }
         ];
 
@@ -808,8 +788,9 @@ void setupWebServer() {
 }
 
 
-// Check if the tag is inside any defined zone
+// Check if the tag is inside any defined zone - DISABLED
 void checkZones() {
+  /*
   bool inAnyZone = false;
   
   for (int i = 0; i < NUM_ZONES; i++) {
@@ -844,6 +825,7 @@ void checkZones() {
       }
     }
   }
+  */
 }
 
 // --- MQTT FUNCTIONS --- 
@@ -1336,7 +1318,7 @@ void loop() {
               last_valid_position_3d[1] = tagPositionY;
               last_valid_position_3d[2] = tagPositionZ;
               
-              checkZones();
+              // checkZones(); // Disabled for now
           } else {
              // WLSQ Failed (Singular matrix?)
              Serial.println("[WLSQ] Matrix inversion failed");
