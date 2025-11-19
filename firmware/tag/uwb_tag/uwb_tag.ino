@@ -66,8 +66,8 @@ static float distance = 0;
 
 // Configuration for measurements and filtering (INDOOR)
 #define NUM_MEASUREMENTS 3
-#define NUM_ANCHORS 5 
-int ID_PONG[NUM_ANCHORS] = {1, 2, 3, 4, 5}; 
+#define NUM_ANCHORS 6 
+int ID_PONG[NUM_ANCHORS] = {1, 2, 3, 4, 5, 6}; 
 float distance_buffer[NUM_ANCHORS][NUM_MEASUREMENTS] = { {0} };
 int buffer_index[NUM_ANCHORS] = {0};
 float anchor_distance[NUM_ANCHORS] = {0};
@@ -115,18 +115,20 @@ bool combination_stable = false;
 float rssi_threshold = 5.0; 
 float validation_threshold = 1.5; // KEEP at 1.5m - good balance proven
 
-// ===== GLOBAL ANCHOR POSITIONS (anchors 1-5) =====
-const float anchorsPos[NUM_ANCHORS][2] = {
-  {-6.0,  0.0},   // Anchor 1 (index 0) - West
-  {-2.6,  7.92},  // Anchor 2 (index 1) - Northwest 
-  { 2.1, 10.36},  // Anchor 3 (index 2) - Northeast
-  { 6.35, 0.0},   // Anchor 4 (index 3) - East 
-  { 0.0, -1.8}    // Anchor 5 (index 4) - South center
+// ===== GLOBAL ANCHOR POSITIONS (anchors 1-6) =====
+// Coordinates: X, Y, Z
+const float anchorsPos[NUM_ANCHORS][3] = {
+  {0.0,  2.0,  1.8},   // Anchor 1
+  {6.0,  6.0,  1.0},   // Anchor 2
+  {3.10, 7.35, 1.8},   // Anchor 3
+  {6.1,  3.75, 1.0},   // Anchor 4
+  {1.8,  3.75, 1.8},   // Anchor 5
+  {3.3,  0.0,  1.0}    // Anchor 6
 };
 
 // ===== HELPER FUNCTIONS =====
 int getAnchorIndex(int anchor_id) {
-  if (anchor_id >= 1 && anchor_id <= 5) {
+  if (anchor_id >= 1 && anchor_id <= 6) {
     return anchor_id - 1;
   }
   return -1; 
@@ -566,13 +568,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     // Calculation of position by trilateration
     function calculateTagPosition() {
         // Physical space configuration INDOOR 
-        const minX = -6.9;
-        const maxX =  6.8;
-        const minY = -3.5;
-        const maxY = 10.36;
+        const minX = -0.5;
+        const maxX =  6.6;
+        const minY = -0.5;
+        const maxY =  7.85;
 
-        const areaWidth  = maxX - minX; // 13.7 m
-        const areaHeight = maxY - minY; // 13.86 m
+        const areaWidth  = maxX - minX; 
+        const areaHeight = maxY - minY;
         const scale = 40;        // 1m = 40px (optimized for web container)
         const margin = 15;       // reduced margin in pixels
       
@@ -629,13 +631,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         vizElements.container = viz;
         viz.innerHTML = ''; 
 
-        const minX = -6.9;
-        const maxX =  6.8;
-        const minY = -3.5;
-        const maxY = 10.36;
+        const minX = -0.5;
+        const maxX =  6.6;
+        const minY = -0.5;
+        const maxY =  7.85;
 
-        const areaWidth  = maxX - minX; // 13.7 m
-        const areaHeight = maxY - minY; // 13.86 m
+        const areaWidth  = maxX - minX; 
+        const areaHeight = maxY - minY;
         const scale = 40;        
         const margin = 15;       
         const vizWidth = areaWidth * scale + 2 * margin;
@@ -657,21 +659,20 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
         // Hexagon vertices in meters (in order)
         const hexVertices = [
-          { x: -6.9, y: -2   }, // V1
-          { x: -1.6, y: 10.36}, // V2 (physical perimeter of the field)
-          { x:  2.1, y: 10.36}, // V3
-          { x:  6.8, y: -1.8 }, // V4
-          { x:  0.0, y: -1.8 }, // V5
-          { x: -0.4, y: -3.5 }  // V6
+          { x: 0.0, y: 0.0 },
+          { x: 0.0, y: 7.35},
+          { x: 6.1, y: 7.35},
+          { x: 6.1, y: 0.0 }
         ];
 
         // Anchor positions with IDs
         const anchorsPosMetros = [
-          { id: 1, x: -6.0,  y: 0.0  },
-          { id: 2, x: -2.6, y: 7.92},
-          { id: 3, x:  2.1, y: 10.36},
-          { id: 4, x:  6.35, y: 0.0 },
-          { id: 5, x:  0.0, y: -1.8 }
+          { id: 1, x: 0.0,  y: 2.0  },
+          { id: 2, x: 6.0,  y: 6.0  },
+          { id: 3, x: 3.10, y: 7.35 },
+          { id: 4, x: 6.1,  y: 3.75 },
+          { id: 5, x: 1.8,  y: 3.75 },
+          { id: 6, x: 3.3,  y: 0.0  }
         ];
 
         // Convert to pixel coordinates with the same system we use for anchors
@@ -1452,17 +1453,18 @@ void loop() {
               float bounded_x = x;
               float bounded_y = y;
               
-              // Apply smooth limits with gradual transition
-              if (x < -6.9f) {
-                bounded_x = -6.9f + (x + 6.9f) * 0.1f; // Reduce extrapolation by 90%
-              } else if (x > 6.8f) {
-                bounded_x = 6.8f + (x - 6.8f) * 0.1f;
+              // Apply smooth limits with gradual transition (0.0 to 6.1)
+              if (x < 0.0f) {
+                bounded_x = 0.0f + x * 0.1f; // Reduce extrapolation by 90%
+              } else if (x > 6.1f) {
+                bounded_x = 6.1f + (x - 6.1f) * 0.1f;
               }
               
-              if (y < -3.5f) {
-                bounded_y = -3.5f + (y + 3.5f) * 0.1f;
-              } else if (y > 10.36f) {
-                bounded_y = 10.36f + (y - 10.36f) * 0.1f;
+              // Apply smooth limits with gradual transition (0.0 to 7.35)
+              if (y < 0.0f) {
+                bounded_y = 0.0f + y * 0.1f;
+              } else if (y > 7.35f) {
+                bounded_y = 7.35f + (y - 7.35f) * 0.1f;
               }
               
               // === APPLY REQUIRED KALMAN FILTER ===
