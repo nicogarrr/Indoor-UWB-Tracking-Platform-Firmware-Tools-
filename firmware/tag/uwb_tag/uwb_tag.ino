@@ -121,7 +121,7 @@ const float anchorsPos[NUM_ANCHORS][3] = {
   {0.0,  2.0,  1.8},   // Anchor 1
   {0.0,  6.0,  1.0},   // Anchor 2
   {3.10, 7.35, 1.8},   // Anchor 3
-  {6.1,  3.75, 1.0},   // Anchor 4
+  {6.1,  6.15, 1.0},   // Anchor 4
   {6.1,  1.8,  1.8},   // Anchor 5
   {3.3,  0.0,  1.0}    // Anchor 6
 };
@@ -202,6 +202,14 @@ bool calculateWLSQPosition(int* available_anchors, int count, float* x, float* y
     // Weight based on RSSI (simple model: stronger signal = higher weight)
     // Map -90dBm to 0.1, -70dBm to 1.0
     float weight = pow(10.0f, (rssi + 90.0f) / 20.0f); 
+    
+    // IMPROVEMENT: Weight by inverse distance squared
+    // Measurements at short distance are much more reliable (Line of Sight)
+    // and less prone to multipath error.
+    // We add a small epsilon (0.1) to avoid division by zero or excessive weight.
+    float dist_weight = 1.0f / (d * d + 0.1f); 
+    weight *= dist_weight;
+
     if (weight < 0.001f) weight = 0.001f;
 
     // Row of H: [-2x, -2y, -2z, 1]
@@ -557,7 +565,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           { id: 1, x: 0.0,  y: 2.0  },
           { id: 2, x: 0.0,  y: 6.0  },
           { id: 3, x: 3.10, y: 7.35 },
-          { id: 4, x: 6.1,  y: 3.75 },
+          { id: 4, x: 6.1,  y: 6.15 },
           { id: 5, x: 6.1,  y: 1.8  },
           { id: 6, x: 3.3,  y: 0.0  }
         ];
@@ -673,11 +681,31 @@ float kalmanFilterDistance(float measurement, int anchor_id) {
   return kalman_dist[anchor_id][0];
 }
 
-// Kalman filter for 3D position
+// Kalman filter for 3D position with Adaptive Q
 void kalmanFilterPosition3D(float measured_x, float measured_y, float measured_z) {
-  kalman_p_x = kalman_p_x + kalman_q;
-  kalman_p_y = kalman_p_y + kalman_q;
-  kalman_p_z = kalman_p_z + kalman_q;
+  // Calculate distance moved (innovation) to adjust Q
+  float dist_moved = sqrt(pow(measured_x - kalman_x, 2) + 
+                          pow(measured_y - kalman_y, 2) + 
+                          pow(measured_z - kalman_z, 2));
+                          
+  // Adaptive Q: 
+  // If moving fast (dist > 0.5m), increase Q to be more reactive
+  // If static (dist < 0.1m), decrease Q to be smoother
+  // Base Q = 0.01
+  
+  float adaptive_q = 0.01;
+  
+  if (dist_moved > 0.5) {
+      adaptive_q = 0.1; // Fast movement -> Trust measurement more
+  } else if (dist_moved > 0.2) {
+      adaptive_q = 0.05; // Medium movement
+  } else {
+      adaptive_q = 0.005; // Static -> Trust model more (smooth)
+  }
+  
+  kalman_p_x = kalman_p_x + adaptive_q;
+  kalman_p_y = kalman_p_y + adaptive_q;
+  kalman_p_z = kalman_p_z + adaptive_q;
   
   float k_x = kalman_p_x / (kalman_p_x + kalman_r);
   float k_y = kalman_p_y / (kalman_p_y + kalman_r);
@@ -1094,7 +1122,7 @@ void loop() {
               Serial.println(ID_PONG[ii]);
 
               DW3000.softReset();
-              delay(100); 
+              delay(10); // Reduced from 100ms to 10ms for faster recovery
               DW3000.init(); 
               DW3000.configureAsTX(); 
               DW3000.clearSystemStatus(); 
@@ -1149,7 +1177,7 @@ void loop() {
                     Serial.println(DW3000.getDestinationID());
                     
                     DW3000.softReset();
-                    delay(100);
+                    delay(10); // Reduced from 100ms to 10ms
                     DW3000.init();
                     DW3000.configureAsTX();
                     DW3000.clearSystemStatus();
@@ -1195,7 +1223,7 @@ void loop() {
                     Serial.println(rx_status);
 
                     DW3000.softReset();
-                    delay(100);
+                    delay(10); // Reduced from 100ms to 10ms
                     DW3000.init();
                     DW3000.configureAsTX();
                     DW3000.clearSystemStatus();
@@ -1237,6 +1265,7 @@ void loop() {
                                   String(anchor_responded[ii] ? 1 : 0); 
                 
                 // --- Publish SINGLE log line IMMEDIATELY --- 
+                /* DISABLED FOR PERFORMANCE - Blocking MQTT here causes lag
                 if (client.connected()) {
                     if (!client.publish(log_topic, dataString.c_str())) {
                        Serial.println("MQTT Publish Failed (single log line)"); 
@@ -1244,6 +1273,7 @@ void loop() {
                 } else {
                     Serial.println("MQTT disconnected, cannot send log line."); 
                 }
+                */
                 // ----------------------------------------------
  
                 // Respond with a PONG
@@ -1312,7 +1342,12 @@ void loop() {
               // === APPLY REQUIRED KALMAN FILTER ===
               kalmanFilterPosition3D(bounded_x, bounded_y, bounded_z);
               
-              // Update previous timestamp and position
+              // FORCE Z STABILITY FOR FUTSAL (Flat floor)
+              // If calculated Z is crazy (>2.5m or <0m), force it to waist height (1.0m)
+              // This prevents Z noise from ruining the visualization
+              if (tagPositionZ < 0.0 || tagPositionZ > 2.5) {
+                  tagPositionZ = 1.0; 
+              }
               last_wlsq_time = millis();
               last_valid_position_3d[0] = tagPositionX;
               last_valid_position_3d[1] = tagPositionY;
@@ -1333,6 +1368,7 @@ void loop() {
            }
         }
         
+        /* DISABLED FOR PERFORMANCE - Serial printing takes ~20ms (blocking)
         for (int i = 0; i < NUM_ANCHORS; i++) {
           Serial.print("Anchor ");
           Serial.print(ID_PONG[i]);
@@ -1342,6 +1378,7 @@ void loop() {
           Serial.print(pot_sig[i]);
           Serial.println("dBm");
         }
+        */
         
         publishStatus();
 

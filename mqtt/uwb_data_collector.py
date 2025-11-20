@@ -45,13 +45,13 @@ class UWBDataCollector:
         # Files with unique timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # *** MAIN FILES FOR ANCHORS 1-5 ***
+        # *** MAIN FILES FOR ANCHORS 1-6 ***
         self.ranging_file = os.path.join(output_dir, f"uwb_ranging_{timestamp}.csv")
         self.positions_file = os.path.join(output_dir, f"uwb_positions_{timestamp}.csv")
         
         # Headers - all distances in meters (no conversion needed)
         self.RANGING_HEADER = "Tag_ID,Timestamp_ms,Anchor_ID,Raw_Distance_m,Filtered_Distance_m,Signal_Power_dBm,Anchor_Status"
-        self.POSITIONS_HEADER = "timestamp,tag_id,x,y,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist"
+        self.POSITIONS_HEADER = "timestamp,tag_id,x,y,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist,anchor_6_dist"
         
         # File handles
         self.ranging_handle = None
@@ -72,7 +72,7 @@ class UWBDataCollector:
             'last_position': None,
             'last_timestamp': None,
             'start_time': time.time(),
-            'anchor_stats': {str(i): {'total': 0, 'responses': 0, 'rssi_sum': 0} for i in [1, 2, 3, 4, 5]},
+            'anchor_stats': {str(i): {'total': 0, 'responses': 0, 'rssi_sum': 0} for i in [1, 2, 3, 4, 5, 6]},
             'session_id': timestamp
         }
         
@@ -259,7 +259,7 @@ class UWBDataCollector:
                 ad = data.get('anchor_distances', {})
                 anchor_distances = {}
                 
-                for i in range(1, 6):
+                for i in range(1, 7):
                     key = str(i)
                     # Direct assignment - no conversion needed
                     distance = ad.get(key, ad.get(str(i*10), 0.0))
@@ -279,7 +279,8 @@ class UWBDataCollector:
                         anchor_distances['2'],
                         anchor_distances['3'],
                         anchor_distances['4'],
-                        anchor_distances['5']
+                        anchor_distances['5'],
+                        anchor_distances['6']
                     ]
                     
                     with self.file_lock:
