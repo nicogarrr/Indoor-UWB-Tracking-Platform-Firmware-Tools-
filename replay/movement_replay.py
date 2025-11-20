@@ -356,9 +356,10 @@ class UWBHexagonReplaySystem:
         if self.use_kalman_filter:
             first_valid_pos = self.find_first_valid_position()
             if first_valid_pos is not None:
+                # OPTIMIZED: Increased process_noise (0.01 -> 0.1) to make it more responsive
                 self.kalman_filter = KalmanPositionFilter(
                     initial_pos=first_valid_pos,
-                    process_noise=0.01,
+                    process_noise=0.1,
                     measurement_noise=0.1
                 )
         
@@ -503,10 +504,10 @@ class UWBHexagonReplaySystem:
         
         return interpolated_df
     
-    def apply_moving_average_smoothing(self, positions_list, window_size=7):
+    def apply_moving_average_smoothing(self, positions_list, window_size=3):
         """
         Aplicar suavizado con media móvil para eliminar tirones.
-        MEJORADO: Ventana más grande y suavizado más agresivo para eliminar tirones hacia atrás.
+        MEJORADO: Ventana reducida (7->3) para evitar recortar las esquinas.
         
         Args:
             positions_list: Lista de posiciones [x, y]
@@ -1133,9 +1134,10 @@ class UWBHexagonReplaySystem:
         if self.use_kalman_filter:
             first_valid_pos = self.find_first_valid_position()
             if first_valid_pos is not None:
+                # OPTIMIZED: Increased process_noise (0.01 -> 0.1) to make it more responsive
                 self.kalman_filter = KalmanPositionFilter(
                     initial_pos=first_valid_pos,
-                    process_noise=0.01,
+                    process_noise=0.1,
                     measurement_noise=0.1
                 )
                 

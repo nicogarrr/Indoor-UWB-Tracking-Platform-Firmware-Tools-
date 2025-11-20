@@ -76,6 +76,13 @@ float pot_sig[NUM_ANCHORS] = {0};
 static int fin_de_com = 0;
 bool anchor_responded[NUM_ANCHORS] = {false}; 
 
+// ===== DYNAMIC ANCHOR SKIPPING =====
+bool anchor_is_active[NUM_ANCHORS] = {true, true, true, true, true, true};
+int anchor_fail_count[NUM_ANCHORS] = {0};
+unsigned long anchor_inactive_ts[NUM_ANCHORS] = {0};
+const int MAX_FAILURES = 3;
+const unsigned long RETRY_INTERVAL = 2000; // 2 seconds
+
 // Variables for timeout 
 unsigned long timeoutStart = 0;
 bool waitingForResponse = false;
@@ -771,7 +778,7 @@ String getDataJson() {
   const int capacity = JSON_OBJECT_SIZE(4) + 
                        JSON_ARRAY_SIZE(NUM_ANCHORS) + 
                        NUM_ANCHORS * JSON_OBJECT_SIZE(3) + 
-                       JSON_OBJECT_SIZE(2) + 
+                       JSON_OBJECT_SIZE(3) + 
                        JSON_OBJECT_SIZE(NUM_ANCHORS);
                        
   StaticJsonDocument<capacity> doc;
@@ -1113,6 +1120,18 @@ void loop() {
         }
 
         for (int ii = 0; ii < NUM_ANCHORS; ii++) {
+          // ===== DYNAMIC SKIPPING: PRE-CHECK =====
+          if (!anchor_is_active[ii]) {
+             if (millis() - anchor_inactive_ts[ii] < RETRY_INTERVAL) {
+                 // Still in penalty box, skip
+                 anchor_responded[ii] = false;
+                 anchor_distance[ii] = 0; 
+                 pot_sig[ii] = -120.0f;
+                 continue; 
+             } 
+             // Else: Time to retry (Ping) -> Proceed to ranging
+          }
+
           DW3000.setDestinationID(ID_PONG[ii]);
           fin_de_com = 0;
           
@@ -1120,6 +1139,20 @@ void loop() {
             if (waitingForResponse && ((millis() - timeoutStart) >= RESPONSE_TIMEOUT)) {
               Serial.print("Timeout REINFORCED for anchor ID: "); 
               Serial.println(ID_PONG[ii]);
+
+              // ===== DYNAMIC SKIPPING: FAILURE (Timeout) =====
+              anchor_fail_count[ii]++;
+              if (anchor_fail_count[ii] >= MAX_FAILURES) {
+                  anchor_is_active[ii] = false;
+                  anchor_inactive_ts[ii] = millis();
+                  anchor_fail_count[ii] = 0; 
+                  Serial.print("[SKIP] Anchor ");
+                  Serial.print(ID_PONG[ii]);
+                  Serial.println(" marked INACTIVE (Timeout)");
+              } else if (!anchor_is_active[ii]) {
+                  // Retry failed
+                  anchor_inactive_ts[ii] = millis(); 
+              }
 
               DW3000.softReset();
               delay(10); // Reduced from 100ms to 10ms for faster recovery
@@ -1176,6 +1209,16 @@ void loop() {
                     Serial.print(", DEST_ID: ");
                     Serial.println(DW3000.getDestinationID());
                     
+                    // ===== DYNAMIC SKIPPING: FAILURE (RX Error) =====
+                    anchor_fail_count[ii]++;
+                    if (anchor_fail_count[ii] >= MAX_FAILURES) {
+                        anchor_is_active[ii] = false;
+                        anchor_inactive_ts[ii] = millis();
+                        anchor_fail_count[ii] = 0; 
+                    } else if (!anchor_is_active[ii]) {
+                        anchor_inactive_ts[ii] = millis(); 
+                    }
+
                     DW3000.softReset();
                     delay(10); // Reduced from 100ms to 10ms
                     DW3000.init();
@@ -1222,6 +1265,16 @@ void loop() {
                     Serial.print("[ERROR] Receiver Error (case 3)! RX_STATUS: ");
                     Serial.println(rx_status);
 
+                    // ===== DYNAMIC SKIPPING: FAILURE (RX Error) =====
+                    anchor_fail_count[ii]++;
+                    if (anchor_fail_count[ii] >= MAX_FAILURES) {
+                        anchor_is_active[ii] = false;
+                        anchor_inactive_ts[ii] = millis();
+                        anchor_fail_count[ii] = 0; 
+                    } else if (!anchor_is_active[ii]) {
+                        anchor_inactive_ts[ii] = millis(); 
+                    }
+
                     DW3000.softReset();
                     delay(10); // Reduced from 100ms to 10ms
                     DW3000.init();
@@ -1248,6 +1301,11 @@ void loop() {
                 pot_sig[ii] = DW3000.getSignalStrength();
 
                 anchor_responded[ii] = true; 
+                
+                // ===== DYNAMIC SKIPPING: SUCCESS =====
+                anchor_is_active[ii] = true;
+                anchor_fail_count[ii] = 0;
+
                 if (distance_meters > 0) { 
                     anchor_distance[ii] = kalmanFilterDistance(distance_meters, ii); 
                 } else {
@@ -1347,6 +1405,7 @@ void loop() {
               // This prevents Z noise from ruining the visualization
               if (tagPositionZ < 0.0 || tagPositionZ > 2.5) {
                   tagPositionZ = 1.0; 
+                  kalman_z = 1.0; // Update Kalman state to maintain consistency
               }
               last_wlsq_time = millis();
               last_valid_position_3d[0] = tagPositionX;
