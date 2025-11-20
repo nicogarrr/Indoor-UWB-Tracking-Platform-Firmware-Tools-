@@ -1,7 +1,7 @@
 #include "DW3000.h"
 
 // ===== CONFIGURATION OF ANCHOR =====
-static int ID_PONG = 1; // Unique ID of the anchor (Cambiar esta linea en las 6 anclas)
+static int ID_PONG = 6; // Unique ID of the anchor (Cambiar esta linea en las 6 anclas)
 
 // ===== COMMUNICATION VARIABLES =====
 static int frame_buffer = 0;
