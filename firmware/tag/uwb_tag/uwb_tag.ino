@@ -41,9 +41,9 @@ const char* logServerIp = "172.20.10.5";
 const int logServerPort = 5000;             
 
 // ===== TDMA Configuration (INDOOR) =====
-// *** Optimized for higher FSR: 5 slots x 10 ms = 50 ms total ***
-const unsigned long TDMA_CYCLE_MS = 60;  // antes 60 ms
-const unsigned long TDMA_SLOT_DURATION_MS = 20;  // antes 20 ms
+// *** Optimized for SPORTS: 20 Hz (50ms cycle) - STABLE SWEET SPOT ***
+const unsigned long TDMA_CYCLE_MS = 50;  // Target: 20 Hz
+const unsigned long TDMA_SLOT_DURATION_MS = 50;  // Full cycle for this tag
 
 // ===== RANGING CONFIGURATION =====
 #define ROUND_DELAY 100
@@ -80,13 +80,13 @@ bool anchor_responded[NUM_ANCHORS] = {false};
 bool anchor_is_active[NUM_ANCHORS] = {true, true, true, true, true, true};
 int anchor_fail_count[NUM_ANCHORS] = {0};
 unsigned long anchor_inactive_ts[NUM_ANCHORS] = {0};
-const int MAX_FAILURES = 3;
+const int MAX_FAILURES = 2;
 const unsigned long RETRY_INTERVAL = 2000; // 2 seconds
 
 // Variables for timeout 
 unsigned long timeoutStart = 0;
 bool waitingForResponse = false;
-const unsigned long RESPONSE_TIMEOUT = 25; // Optimal 25ms timeout (proven stable) 
+const unsigned long RESPONSE_TIMEOUT = 15; // Aggressive 15ms timeout for 20Hz
 
 // Variables for state manager 
 unsigned long lastUpdate = 0;
@@ -266,7 +266,7 @@ bool calculateWLSQPosition(int* available_anchors, int count, float* x, float* y
 // Variables for MQTT and State 
 unsigned long lastMqttReconnectAttempt = 0;
 unsigned long lastStatusUpdate = 0;
-const long statusUpdateInterval = 50; // Optimal 50ms (proven stable at 8.6Hz) 
+const long statusUpdateInterval = 40; // Sync with ~20Hz (50ms) - faster to avoid buffer buildup
 String last_anchor_id = "N/A"; 
 
 // ===== SYSTEM BUFFERING =====
@@ -277,7 +277,7 @@ struct StabilizedBuffer {
   int buffer_head = 0;
   int buffer_count = 0;
   unsigned long last_output_time = 0;
-  const unsigned long OUTPUT_INTERVAL = 50; // Optimal 50ms (proven stable) 
+  const unsigned long OUTPUT_INTERVAL = 45; // Sync with ~20Hz
 } stable_buffer;
 
 // ===== MQTT FLOW CONTROL VARIABLES =====
@@ -892,12 +892,12 @@ void reconnectMQTT() {
 }
 
 void publishStatus() {
-   // OPTIMIZED FOR 8.6Hz - 50ms fixed = 20 Hz max (proven optimal)
+   // OPTIMIZED FOR 20Hz - 50ms interval
    static unsigned long lastPublish = 0;
    unsigned long currentTime = millis();
    
-   // Strict timing control - EXACTLY every 50ms for stable frequency
-   if (currentTime - lastPublish < 50) {
+   // Strict timing control - EXACTLY every 45ms (allow slight overlap for 50ms cycle)
+   if (currentTime - lastPublish < 45) {
      return; // Exit immediately if the time hasn't passed
    }
    
@@ -1054,6 +1054,7 @@ void setup() {
   Serial.println(status_topic);
 
   DW3000.begin();
+  SPI.setFrequency(8000000); // Set SPI to 8MHz for stable communication (20MHz can be unstable)
   DW3000.hardReset();
   delay(200);
   
@@ -1155,7 +1156,7 @@ void loop() {
               }
 
               DW3000.softReset();
-              delay(10); // Reduced from 100ms to 10ms for faster recovery
+              delay(1); // Reduced to 1ms for 20Hz target
               DW3000.init(); 
               DW3000.configureAsTX(); 
               DW3000.clearSystemStatus(); 
@@ -1220,7 +1221,7 @@ void loop() {
                     }
 
                     DW3000.softReset();
-                    delay(10); // Reduced from 100ms to 10ms
+                    delay(1); // Reduced to 1ms
                     DW3000.init();
                     DW3000.configureAsTX();
                     DW3000.clearSystemStatus();
@@ -1276,7 +1277,7 @@ void loop() {
                     }
 
                     DW3000.softReset();
-                    delay(10); // Reduced from 100ms to 10ms
+                    delay(1); // Reduced to 1ms
                     DW3000.init();
                     DW3000.configureAsTX();
                     DW3000.clearSystemStatus();
@@ -1397,6 +1398,7 @@ void loop() {
                 bounded_z = 3.0f + (z - 3.0f) * 0.1f;
               }
               
+
               // === APPLY REQUIRED KALMAN FILTER ===
               kalmanFilterPosition3D(bounded_x, bounded_y, bounded_z);
               
@@ -1412,6 +1414,9 @@ void loop() {
               last_valid_position_3d[1] = tagPositionY;
               last_valid_position_3d[2] = tagPositionZ;
               
+
+              
+
               // checkZones(); // Disabled for now
           } else {
              // WLSQ Failed (Singular matrix?)
@@ -1447,4 +1452,4 @@ void loop() {
 
   // Single WebSocket broadcast - smooth and efficient
   broadcastWebSocket();
-} 
+}
