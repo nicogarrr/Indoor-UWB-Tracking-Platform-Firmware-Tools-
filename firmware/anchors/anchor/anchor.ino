@@ -1,7 +1,7 @@
 #include "DW3000.h"
 
 // ===== CONFIGURATION OF ANCHOR =====
-static int ID_PONG = 6; // Unique ID of the anchor (Cambiar esta linea en las 6 anclas)
+static int ID_PONG = 5; // Unique ID of the anchor (Cambiar esta linea en las 6 anclas)
 
 // ===== COMMUNICATION VARIABLES =====
 static int frame_buffer = 0;
@@ -31,7 +31,7 @@ struct AnchorStats {
 } stats;
 
 // ===== OPTIMIZED CONFIGURATIONS =====
-const unsigned long RX_TIMEOUT_MS = 100; // Timeout for reception
+const unsigned long RX_TIMEOUT_MS = 20; // Optimized for 20Hz Tag (was 100ms)
 const unsigned long RESPONSE_DELAY_US = 50; // Minimum delay between responses
 
 void setup() {
@@ -52,13 +52,13 @@ void setup() {
 void initializeDW3000() {
   DW3000.begin();
   DW3000.hardReset();
-  delay(100); // Reduced for faster startup
+  delay(10); // Reduced for faster startup (was 100ms)
   
   // Verification with retries
   int retries = 0;
   while (!DW3000.checkForIDLE() && retries < 5) {
     Serial.printf("[WARNING] IDLE check failed, retry %d/5\n", ++retries);
-    delay(50);
+    delay(10); // Reduced retry delay
   }
   
   if (retries >= 5) {
@@ -67,7 +67,7 @@ void initializeDW3000() {
   }
   
   DW3000.softReset();
-  delay(100);
+  delay(10); // Reduced (was 100ms)
   
   if (!DW3000.checkForIDLE()) {
     Serial.println("[ERROR] DW3000 soft reset failed! Restarting...");

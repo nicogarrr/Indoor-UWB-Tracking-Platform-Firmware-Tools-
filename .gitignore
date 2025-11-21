@@ -13,7 +13,7 @@ __pycache__/
 .Python
 venv/
 env/
-
+*.csv
 # ===== PLATFORMIO/ARDUINO =====
 .pio/
 .vscode/

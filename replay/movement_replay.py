@@ -356,9 +356,10 @@ class UWBHexagonReplaySystem:
         if self.use_kalman_filter:
             first_valid_pos = self.find_first_valid_position()
             if first_valid_pos is not None:
+                # OPTIMIZED: Increased process_noise (0.1 -> 0.3) for SPORTS (high reactivity)
                 self.kalman_filter = KalmanPositionFilter(
                     initial_pos=first_valid_pos,
-                    process_noise=0.01,
+                    process_noise=0.3,
                     measurement_noise=0.1
                 )
         
@@ -503,10 +504,10 @@ class UWBHexagonReplaySystem:
         
         return interpolated_df
     
-    def apply_moving_average_smoothing(self, positions_list, window_size=7):
+    def apply_moving_average_smoothing(self, positions_list, window_size=3):
         """
         Aplicar suavizado con media móvil para eliminar tirones.
-        MEJORADO: Ventana más grande y suavizado más agresivo para eliminar tirones hacia atrás.
+        MEJORADO: Ventana reducida (7->3) para evitar recortar las esquinas.
         
         Args:
             positions_list: Lista de posiciones [x, y]
@@ -1133,9 +1134,10 @@ class UWBHexagonReplaySystem:
         if self.use_kalman_filter:
             first_valid_pos = self.find_first_valid_position()
             if first_valid_pos is not None:
+                # OPTIMIZED: Increased process_noise (0.1 -> 0.3) for SPORTS (high reactivity)
                 self.kalman_filter = KalmanPositionFilter(
                     initial_pos=first_valid_pos,
-                    process_noise=0.01,
+                    process_noise=0.3,
                     measurement_noise=0.1
                 )
                 
@@ -1252,6 +1254,25 @@ def generate_movement_report(csv_file):
         print(f"  WARNING: Maximum speed too high ({max_speed:.1f} m/s)")
     else:
         print(f" Realistic maximum speed ({max_speed:.1f} m/s)")
+    
+    # === PACKET LOSS ANALYSIS ===
+    print("\n PACKET LOSS ANALYSIS (per Anchor)")
+    print("-" * 50)
+    anchor_cols = [col for col in df.columns if 'anchor_' in col and '_dist' in col]
+    if anchor_cols:
+        for col in anchor_cols:
+            anchor_id = col.replace('anchor_', '').replace('_dist', '')
+            total_samples = len(df)
+            lost_samples = (df[col] == 0).sum()
+            loss_rate = (lost_samples / total_samples) * 100
+            
+            status = "OK"
+            if loss_rate > 50: status = "CRITICAL"
+            elif loss_rate > 20: status = "WARNING"
+            
+            print(f" Anchor {anchor_id}: {loss_rate:5.1f}% Loss ({lost_samples}/{total_samples}) - {status}")
+    else:
+        print(" No anchor distance data found in CSV")
     
     print("=" * 50)
 
@@ -1401,4 +1422,4 @@ Usage examples:
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    main()

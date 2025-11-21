@@ -1,51 +1,6 @@
 # TFG-UWB: Indoor UWB Tracking Platform (Firmware & Tools)
 
 ## Introduction
-This project implements a comprehensive **Ultra-Wideband (UWB) indoor tracking platform** featuring high-precision localization using DW3000 chips and ESP32 boards. Originally designed for futsal movement analysis, this platform can be adapted for various sports, robotics, and indoor positioning applications.
-
-The system provides both **firmware** for UWB devices and **analysis tools** for data processing and visualization.
-
-The system consists of the following main components:
-
-1. **UWB anchor firmware** (5 `*.ino` files).  
-2. **UWB tag firmware** (`uwb_tag.ino`).  
-3. **MQTT data collector** in Python (`mqtt/uwb_data_collector.py`).  
-4. **Replay and analysis system** in Python (`replay/movement_replay.py`).  
-5. **Sample dataset** in CSV format (`uwb_data/` directory).
-
-Key Technical Features
----------------------
-* Positioning with 5 DW3000 anchors and one mobile tag.  
-* TDMA protocol to avoid collisions and maximize update frequency.  
-* Firmware optimized for ESP32 microcontroller (dual-core mode).  
-* Real-time data publishing via MQTT.  
-* Storage of measurements and positions in CSV format.  
-* Interactive player with Kalman filter and prediction using Gaussian Process Regression.
-
-Repository Structure
--------------------
-```
-TFG OFICIAL/
-├── firmware/
-│   ├── anchors/
-│   │   ├── anchor_1.ino
-│   │   ├── anchor_2.ino
-│   │   ├── anchor_3.ino
-│   │   ├── anchor_4.ino
-│   │   └── anchor_5.ino
-│   └── tag/
-│       └── uwb_tag.ino
-├── mqtt/
-│   └── uwb_data_collector.py
-├── replay/
-│   └── movement_replay.py
-├── uwb_data/               # Experimental data (CSV)
-├── requirements.txt        # Python dependencies
-└── pyproject.toml          # Development tool configuration
-```
-
-Hardware Requirements
---------------------
 
 ### UWB Hardware (Makerfabs)
 This project is designed to work with **Makerfabs ESP32 UWB** boards. The following models are compatible:
@@ -103,7 +58,7 @@ Firmware Programming
 1. Install Arduino IDE 2.x and add the **ESP32** board package.  
 2. Select **ESP32 WROVER Module** board with PSRAM enabled.  
 3. Compile and upload the following firmware:
-   * `firmware/anchors/anchor_X.ino` (change `X` to 1-5 according to anchor).  
+   * `firmware/anchors/anchor_X.ino` (change `X` to 1-6 according to anchor).  
    * `firmware/tag/uwb_tag.ino` for the mobile tag.
 4. Configure Wi-Fi network parameters in each file and, if necessary, the anchor identifier (`ID_PONG`).
 
@@ -120,6 +75,18 @@ System Usage
    python replay/movement_replay.py --file path/to/file.csv
    ```
    The player allows pausing, adjusting speed, and applying filters in real time.
+
+4. **Analyze Data**:
+   ```bash
+   python uwb_data/analyze_csv.py
+   ```
+   Provides statistical metrics (jitter, frequency, packet loss) for a selected file.
+
+5. **Compare Datasets**:
+   ```bash
+   python uwb_data/compare_csv.py
+   ```
+   Compares two CSV files side-by-side to evaluate improvements or changes in configuration.
 
 Data Format
 -----------
@@ -144,5 +111,5 @@ This project is distributed for academic purposes for the Final Degree Project a
 Contact
 -------
 Author: Nicolás Iglesias García  
-Email: nico.iglesias@example.com  
+Email: nicoiglesiasgarcia10@gmail.com  / uo288336@uniovi.es
 Polytechnic School of Engineering of Gijón, University of Oviedo
