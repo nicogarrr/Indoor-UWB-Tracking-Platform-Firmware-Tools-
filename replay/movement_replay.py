@@ -643,9 +643,9 @@ class UWBHexagonReplaySystem:
         except Exception:
             pass
         
-        # ======================== INDOOR AREA (updated to 10.60 x 7.35) ========================
+        # ======================== INDOOR AREA (updated to 10.60 x 6.40) ========================
         minX, maxX = 0.0, 10.6
-        minY, maxY = 0.0, 7.35
+        minY, maxY = 0.0, 6.40
         self.ax.set_xlim(minX - 1, maxX + 1)
         self.ax.set_ylim(minY - 1, maxY + 1)
         self.ax.set_aspect('equal')
@@ -665,14 +665,14 @@ class UWBHexagonReplaySystem:
 
     
     def draw_hexagon_anchors(self):
-        """Draw UWB anchors in the indoor arrangement (6 anchors) - updated positions for 10.60 x 7.35"""
+        """Draw UWB anchors in the indoor arrangement (6 anchors) - updated positions for 10.60 x 6.40"""
         anchors = {
             'A1': (0.0,  0.0,  'blue'),  # Left Bottom Corner
-            'A2': (0.0,  7.35, 'blue'),  # Left Top Corner
-            'A3': (5.3,  7.35, 'blue'),  # Top Edge Midpoint
-            'A4': (10.6, 7.35, 'blue'),  # Right Top Corner
+            'A2': (0.0,  6.40, 'blue'),  # Left Top Corner
+            'A3': (4.7,  6.40, 'blue'),  # Top Edge Midpoint
+            'A4': (10.6, 6.40, 'blue'),  # Right Top Corner
             'A5': (10.6, 0.0,  'blue'),  # Right Bottom Corner
-            'A6': (5.3,  0.0,  'blue')   # Bottom Edge Midpoint
+            'A6': (5.50,  0.0,  'blue')   # Bottom Edge Midpoint
         }
 
         for anchor_id, (x, y, color) in anchors.items():
@@ -683,11 +683,11 @@ class UWBHexagonReplaySystem:
     
     def draw_hexagon_area(self):
         """Draw the play area perimeter"""
-        # Vertices of the room (Rectangular 10.6m x 7.35m)
+        # Vertices of the room (Rectangular 10.6m x 6.40m)
         verts = [
             (0.0, 0.0),       # Lower left
-            (0.0, 7.35),      # Upper left
-            (10.6, 7.35),     # Upper right
+            (0.0, 6.40),      # Upper left
+            (10.6, 6.40),     # Upper right
             (10.6, 0.0),      # Lower right
             (0.0, 0.0)        # Close loop
         ]
@@ -791,7 +791,7 @@ class UWBHexagonReplaySystem:
         if not (-1.0 <= x <= 7.0 and -1.0 <= y <= 8.5):
             return "OUTSIDE THE AREA"
         
-        # Specific zones for the indoor area (10.6m x 7.35m)
+        # Specific zones for the indoor area (10.6m x 6.40m)
         if y >= 5.5:
             return "NORTH ZONE"
         elif y <= 1.8:

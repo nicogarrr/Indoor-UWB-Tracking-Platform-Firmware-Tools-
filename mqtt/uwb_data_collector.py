@@ -51,7 +51,7 @@ class UWBDataCollector:
         
         # Headers - all distances in meters (no conversion needed)
         self.RANGING_HEADER = "Tag_ID,Timestamp_ms,Anchor_ID,Raw_Distance_m,Filtered_Distance_m,Signal_Power_dBm,Anchor_Status"
-        self.POSITIONS_HEADER = "timestamp,tag_id,x,y,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist,anchor_6_dist"
+        self.POSITIONS_HEADER = "timestamp,tag_id,x,y,z,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist,anchor_6_dist"
         
         # File handles
         self.ranging_handle = None
@@ -244,21 +244,21 @@ class UWBDataCollector:
                 pos = data['position']
                 x = pos.get('x', 0.0)
                 y = pos.get('y', 0.0)
-                
+                z = pos.get('z', 0.0)
+
                 # Position statistics (informative)
                 with self.file_lock:
                     if -10.0 <= x <= 10.0 and -5.0 <= y <= 15.0:  # Extended range
                         self.stats['positions_in_bounds'] += 1
                     else:
                         self.stats['positions_out_bounds'] += 1
-                    
-                    self.stats['last_position'] = [x, y]
+                    self.stats['last_position'] = [x, y, z]
                     self.stats['last_timestamp'] = timestamp_system
 
                 # Get distances to anchors (flexible mapping)
                 ad = data.get('anchor_distances', {})
                 anchor_distances = {}
-                
+
                 for i in range(1, 7):
                     key = str(i)
                     # Direct assignment - no conversion needed
@@ -267,7 +267,7 @@ class UWBDataCollector:
 
                 # Timestamp readable format
                 dt_timestamp = datetime.datetime.fromtimestamp(timestamp_system)
-                
+
                 # Write to positions file
                 if self.positions_handle:
                     row = [
@@ -275,6 +275,7 @@ class UWBDataCollector:
                         tag_id,
                         x,
                         y,
+                        z,
                         anchor_distances['1'],
                         anchor_distances['2'],
                         anchor_distances['3'],
@@ -282,7 +283,6 @@ class UWBDataCollector:
                         anchor_distances['5'],
                         anchor_distances['6']
                     ]
-                    
                     with self.file_lock:
                         self.positions_handle.write(','.join(str(v) for v in row) + '\n')
                         

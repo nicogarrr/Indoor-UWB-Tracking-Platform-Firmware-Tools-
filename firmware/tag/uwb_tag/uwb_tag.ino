@@ -126,11 +126,11 @@ float last_valid_position_3d[3] = {0.0, 0.0, 0.0};
 // Coordinates: X, Y, Z
 const float anchorsPos[NUM_ANCHORS][3] = {
   {0.0,  0.0,  1.8},   // Anchor 1 (Left Bottom Corner)
-  {0.0,  7.35, 1.0},   // Anchor 2 (Left Top Corner)
-  {5.3,  7.35, 1.8},   // Anchor 3 (Top Edge Midpoint)
-  {10.6, 7.35, 1.0},   // Anchor 4 (Right Top Corner)
+  {0.0,  6.40, 0.8},   // Anchor 2 (Left Top Corner)
+  {4,  6.40, 1.8},   // Anchor 3 (Top Edge Midpoint)
+  {10.6, 6.40, 0.8},   // Anchor 4 (Right Top Corner)
   {10.6, 0.0,  1.8},   // Anchor 5 (Right Bottom Corner)
-  {5.3,  0.0,  1.0}    // Anchor 6 (Bottom Edge Midpoint)
+  {5.5,  0.0,  0.8}    // Anchor 6 (Bottom Edge Midpoint)
 };
 
 // ===== HELPER FUNCTIONS =====
@@ -469,11 +469,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
     // Calculation of position by trilateration
     function calculateTagPosition() {
-        // Physical space configuration INDOOR (updated to 10.60 x 7.35)
+        // Physical space configuration INDOOR (updated to 10.60 x 6.40)
         const minX = -0.5;
         const maxX = 11.1; // 10.6 + 0.5 padding
         const minY = -0.5;
-        const maxY = 7.85; // 7.35 + 0.5 padding
+        const maxY = 7.85; // 6.40 + 0.5 padding
 
         const areaWidth  = maxX - minX; 
         const areaHeight = maxY - minY;
@@ -559,22 +559,22 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         svg.style.left = '0';
         svg.style.top  = '0';
 
-        // Rectangle vertices in meters (in order) for 10.60 x 7.35
+        // Rectangle vertices in meters (in order) for 10.60 x 6.40
         const hexVertices = [
           { x: 0.0,  y: 0.0 },
-          { x: 0.0,  y: 7.35 },
-          { x: 10.6, y: 7.35 },
+          { x: 0.0,  y: 6.40 },
+          { x: 10.6, y: 6.40 },
           { x: 10.6, y: 0.0 }
         ];
 
-        // Anchor positions with IDs (updated to new layout for 10.60 x 7.35)
+        // Anchor positions with IDs (updated to new layout for 10.60 x 6.40)
         const anchorsPosMetros = [
           { id: 1, x: 0.0,  y: 0.0  }, // Left Bottom Corner
-          { id: 2, x: 0.0,  y: 7.35 }, // Left Top Corner
-          { id: 3, x: 5.3,  y: 7.35 }, // Top Edge Midpoint
-          { id: 4, x: 10.6, y: 7.35 }, // Right Top Corner
+          { id: 2, x: 0.0,  y: 6.40 }, // Left Top Corner
+          { id: 3, x: 4,  y: 6.40 }, // Top Edge Midpoint
+          { id: 4, x: 10.6, y: 6.40 }, // Right Top Corner
           { id: 5, x: 10.6, y: 0.0  }, // Right Bottom Corner
-          { id: 6, x: 5.3,  y: 0.0  }  // Bottom Edge Midpoint
+          { id: 6, x: 5.5,  y: 0.0  }  // Bottom Edge Midpoint
         ];
 
         // Convert to pixel coordinates with the same system we use for anchors
@@ -1384,11 +1384,11 @@ void loop() {
                 bounded_x = 10.6f + (x - 10.6f) * 0.1f;
               }
               
-              // Apply smooth limits with gradual transition (0.0 to 7.35)
+              // Apply smooth limits with gradual transition (0.0 to 6.40)
               if (y < 0.0f) {
                 bounded_y = 0.0f + y * 0.1f;
-              } else if (y > 7.35f) {
-                bounded_y = 7.35f + (y - 7.35f) * 0.1f;
+              } else if (y > 6.40f) {
+                bounded_y = 6.40f + (y - 6.40f) * 0.1f;
               }
 
               // Apply smooth limits for Z (0.0 to 3.0m approx)
