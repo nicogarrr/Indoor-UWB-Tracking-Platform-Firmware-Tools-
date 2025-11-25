@@ -5,7 +5,7 @@ Optimized UWB data collector with:
 - Thread-safe high frequency data capture
 - No real-time filtering (post-processing)
 - Real-time statistics
-- Compatible with anchors 1, 2, 3, 4, 5
+- Compatible with anchors 1, 2, 3, 4, 5, 6
 - All distances in meters (no unit conversion needed)
 """
 
@@ -92,7 +92,7 @@ class UWBDataCollector:
         
         print(f"TFG UWB Data Collector ULTIMATE")
         print(f"Output directory: {output_dir}")
-        print(f"Configuration: Anchors 1-5, maximum capture, all data in meters")
+        print(f"Configuration: Anchors 1-6, maximum capture, all data in meters")
         print("=" * 60)
 
     def init_csv_files(self):
@@ -387,7 +387,7 @@ class UWBDataCollector:
         print("Collector stopped correctly")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="TFG UWB - Data Collector for Anchors 1-5")
+    parser = argparse.ArgumentParser(description="TFG UWB - Data Collector for Anchors 1-6")
     parser.add_argument("--mqtt-server", help="MQTT broker IP (auto-detection if not specified)")
     parser.add_argument("--mqtt-port", type=int, default=1883, help="MQTT port")
     parser.add_argument("--output-dir", default="uwb_data", help="Output directory")

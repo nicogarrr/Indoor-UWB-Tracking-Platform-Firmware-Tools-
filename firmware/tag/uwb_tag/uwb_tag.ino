@@ -125,12 +125,12 @@ float last_valid_position_3d[3] = {0.0, 0.0, 0.0};
 // ===== GLOBAL ANCHOR POSITIONS (anchors 1-6) =====
 // Coordinates: X, Y, Z
 const float anchorsPos[NUM_ANCHORS][3] = {
-  {0.0,  2.0,  1.8},   // Anchor 1
-  {0.0,  6.0,  1.0},   // Anchor 2
-  {3.10, 7.35, 1.8},   // Anchor 3
-  {6.1,  6.15, 1.0},   // Anchor 4
-  {6.1,  1.8,  1.8},   // Anchor 5
-  {3.3,  0.0,  1.0}    // Anchor 6
+  {0.0,  0.0,  1.8},   // Anchor 1 (Left Bottom Corner)
+  {0.0,  7.35, 1.0},   // Anchor 2 (Left Top Corner)
+  {5.3,  7.35, 1.8},   // Anchor 3 (Top Edge Midpoint)
+  {10.6, 7.35, 1.0},   // Anchor 4 (Right Top Corner)
+  {10.6, 0.0,  1.8},   // Anchor 5 (Right Bottom Corner)
+  {5.3,  0.0,  1.0}    // Anchor 6 (Bottom Edge Midpoint)
 };
 
 // ===== HELPER FUNCTIONS =====
@@ -469,11 +469,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
     // Calculation of position by trilateration
     function calculateTagPosition() {
-        // Physical space configuration INDOOR 
+        // Physical space configuration INDOOR (updated to 10.60 x 7.35)
         const minX = -0.5;
-        const maxX =  6.6;
+        const maxX = 11.1; // 10.6 + 0.5 padding
         const minY = -0.5;
-        const maxY =  7.85;
+        const maxY = 7.85; // 7.35 + 0.5 padding
 
         const areaWidth  = maxX - minX; 
         const areaHeight = maxY - minY;
@@ -534,9 +534,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         viz.innerHTML = ''; 
 
         const minX = -0.5;
-        const maxX =  6.6;
+        const maxX = 11.1; // Updated for 10.6m width + padding
         const minY = -0.5;
-        const maxY =  7.85;
+        const maxY = 7.85;
 
         const areaWidth  = maxX - minX; 
         const areaHeight = maxY - minY;
@@ -559,22 +559,22 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         svg.style.left = '0';
         svg.style.top  = '0';
 
-        // Hexagon vertices in meters (in order)
+        // Rectangle vertices in meters (in order) for 10.60 x 7.35
         const hexVertices = [
-          { x: 0.0, y: 0.0 },
-          { x: 0.0, y: 7.35},
-          { x: 6.1, y: 7.35},
-          { x: 6.1, y: 0.0 }
+          { x: 0.0,  y: 0.0 },
+          { x: 0.0,  y: 7.35 },
+          { x: 10.6, y: 7.35 },
+          { x: 10.6, y: 0.0 }
         ];
 
-        // Anchor positions with IDs
+        // Anchor positions with IDs (updated to new layout for 10.60 x 7.35)
         const anchorsPosMetros = [
-          { id: 1, x: 0.0,  y: 2.0  },
-          { id: 2, x: 0.0,  y: 6.0  },
-          { id: 3, x: 3.10, y: 7.35 },
-          { id: 4, x: 6.1,  y: 6.15 },
-          { id: 5, x: 6.1,  y: 1.8  },
-          { id: 6, x: 3.3,  y: 0.0  }
+          { id: 1, x: 0.0,  y: 0.0  }, // Left Bottom Corner
+          { id: 2, x: 0.0,  y: 7.35 }, // Left Top Corner
+          { id: 3, x: 5.3,  y: 7.35 }, // Top Edge Midpoint
+          { id: 4, x: 10.6, y: 7.35 }, // Right Top Corner
+          { id: 5, x: 10.6, y: 0.0  }, // Right Bottom Corner
+          { id: 6, x: 5.3,  y: 0.0  }  // Bottom Edge Midpoint
         ];
 
         // Convert to pixel coordinates with the same system we use for anchors
@@ -1376,12 +1376,12 @@ void loop() {
               float bounded_x = x;
               float bounded_y = y;
               float bounded_z = z;
-              
-              // Apply smooth limits with gradual transition (0.0 to 6.1)
+
+              // Apply smooth limits with gradual transition (0.0 to 10.6)
               if (x < 0.0f) {
                 bounded_x = 0.0f + x * 0.1f; 
-              } else if (x > 6.1f) {
-                bounded_x = 6.1f + (x - 6.1f) * 0.1f;
+              } else if (x > 10.6f) {
+                bounded_x = 10.6f + (x - 10.6f) * 0.1f;
               }
               
               // Apply smooth limits with gradual transition (0.0 to 7.35)
