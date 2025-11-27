@@ -95,6 +95,16 @@ Data Format
 * Positions: `uwb_positions_YYYYMMDD_HHMMSS.csv`  
   * Columns: `timestamp,tag_id,x,y,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist`
 
+System Performance
+------------------
+Based on experimental data (Nov 2025), the system achieves the following precision metrics:
+
+* **Update Frequency**: ~20 Hz
+* **Precision (Standard Deviation)**:
+  * **X-Axis**: ±0.19 m
+  * **Y-Axis**: ±0.19 m
+  * **Total (2D)**: ±0.27 m
+
 Technical Resources
 ------------------
 

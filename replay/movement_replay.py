@@ -257,7 +257,7 @@ class UWBHexagonReplaySystem:
         """
         print("Loading UWB Replay System...")
         
-        self.use_kalman_filter = True
+        self.use_kalman_filter = False
         self.use_ml_prediction = False
         self.optimize_memory = optimize_memory
         self.skip_trail = skip_trail
@@ -325,6 +325,10 @@ class UWBHexagonReplaySystem:
             self.original_df['timestamp'] = pd.to_datetime(self.original_df['timestamp'])
             
             required_columns = ['timestamp', 'x', 'y', 'tag_id']
+            # Check for Z column, if not present create it with 0.0
+            if 'z' not in self.original_df.columns:
+                print("Note: 'z' column not found, initializing with 0.0")
+                self.original_df['z'] = 0.0
             missing_cols = [col for col in required_columns if col not in self.original_df.columns]
             if missing_cols:
                 raise ValueError(f"Missing columns: {missing_cols}")
