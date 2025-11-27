@@ -5,7 +5,7 @@ Optimized UWB data collector with:
 - Thread-safe high frequency data capture
 - No real-time filtering (post-processing)
 - Real-time statistics
-- Compatible with anchors 1, 2, 3, 4, 5
+- Compatible with anchors 1, 2, 3, 4, 5, 6
 - All distances in meters (no unit conversion needed)
 """
 
@@ -51,7 +51,7 @@ class UWBDataCollector:
         
         # Headers - all distances in meters (no conversion needed)
         self.RANGING_HEADER = "Tag_ID,Timestamp_ms,Anchor_ID,Raw_Distance_m,Filtered_Distance_m,Signal_Power_dBm,Anchor_Status"
-        self.POSITIONS_HEADER = "timestamp,tag_id,x,y,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist,anchor_6_dist"
+        self.POSITIONS_HEADER = "timestamp,tag_id,x,y,z,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist,anchor_6_dist"
         
         # File handles
         self.ranging_handle = None
@@ -92,7 +92,7 @@ class UWBDataCollector:
         
         print(f"TFG UWB Data Collector ULTIMATE")
         print(f"Output directory: {output_dir}")
-        print(f"Configuration: Anchors 1-5, maximum capture, all data in meters")
+        print(f"Configuration: Anchors 1-6, maximum capture, all data in meters")
         print("=" * 60)
 
     def init_csv_files(self):
@@ -244,21 +244,21 @@ class UWBDataCollector:
                 pos = data['position']
                 x = pos.get('x', 0.0)
                 y = pos.get('y', 0.0)
-                
+                z = pos.get('z', 0.0)
+
                 # Position statistics (informative)
                 with self.file_lock:
                     if -10.0 <= x <= 10.0 and -5.0 <= y <= 15.0:  # Extended range
                         self.stats['positions_in_bounds'] += 1
                     else:
                         self.stats['positions_out_bounds'] += 1
-                    
-                    self.stats['last_position'] = [x, y]
+                    self.stats['last_position'] = [x, y, z]
                     self.stats['last_timestamp'] = timestamp_system
 
                 # Get distances to anchors (flexible mapping)
                 ad = data.get('anchor_distances', {})
                 anchor_distances = {}
-                
+
                 for i in range(1, 7):
                     key = str(i)
                     # Direct assignment - no conversion needed
@@ -267,7 +267,7 @@ class UWBDataCollector:
 
                 # Timestamp readable format
                 dt_timestamp = datetime.datetime.fromtimestamp(timestamp_system)
-                
+
                 # Write to positions file
                 if self.positions_handle:
                     row = [
@@ -275,6 +275,7 @@ class UWBDataCollector:
                         tag_id,
                         x,
                         y,
+                        z,
                         anchor_distances['1'],
                         anchor_distances['2'],
                         anchor_distances['3'],
@@ -282,7 +283,6 @@ class UWBDataCollector:
                         anchor_distances['5'],
                         anchor_distances['6']
                     ]
-                    
                     with self.file_lock:
                         self.positions_handle.write(','.join(str(v) for v in row) + '\n')
                         
@@ -387,7 +387,7 @@ class UWBDataCollector:
         print("Collector stopped correctly")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="TFG UWB - Data Collector for Anchors 1-5")
+    parser = argparse.ArgumentParser(description="TFG UWB - Data Collector for Anchors 1-6")
     parser.add_argument("--mqtt-server", help="MQTT broker IP (auto-detection if not specified)")
     parser.add_argument("--mqtt-port", type=int, default=1883, help="MQTT port")
     parser.add_argument("--output-dir", default="uwb_data", help="Output directory")

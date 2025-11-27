@@ -643,9 +643,9 @@ class UWBHexagonReplaySystem:
         except Exception:
             pass
         
-        # ======================== INDOOR AREA ========================
-        minX, maxX = 0.0, 6.1
-        minY, maxY = 0.0, 7.35
+        # ======================== INDOOR AREA (updated to 10.60 x 6.40) ========================
+        minX, maxX = 0.0, 10.6
+        minY, maxY = 0.0, 6.40
         self.ax.set_xlim(minX - 1, maxX + 1)
         self.ax.set_ylim(minY - 1, maxY + 1)
         self.ax.set_aspect('equal')
@@ -665,29 +665,31 @@ class UWBHexagonReplaySystem:
 
     
     def draw_hexagon_anchors(self):
-        """Draw UWB anchors in the indoor arrangement (Updated to 6 anchors)"""
+        """Draw UWB anchors in the indoor arrangement (6 anchors) - updated positions for 10.60 x 6.40"""
         anchors = {
-            'A1': (0.0, 2.0, 'blue'),
-            'A2': (0.0, 6.0, 'blue'),
-            'A3': (3.10, 7.35, 'blue'),
-            'A4': (6.1, 6.15, 'blue'),
-            'A5': (6.1, 1.8, 'blue'),
-            'A6': (3.3, 0.0, 'blue')
+            'A1': (0.0,  0.0,  'blue'),  # Left Bottom Corner
+            'A2': (0.0,  6.40, 'blue'),  # Left Top Corner
+            'A3': (4.7,  6.40, 'blue'),  # Top Edge Midpoint
+            'A4': (10.6, 6.40, 'blue'),  # Right Top Corner
+            'A5': (10.6, 0.0,  'blue'),  # Right Bottom Corner
+            'A6': (5.50,  0.0,  'blue')   # Bottom Edge Midpoint
         }
 
         for anchor_id, (x, y, color) in anchors.items():
             self.ax.plot(x, y, 's', color=color, markersize=10, zorder=5)
-            self.ax.text(x, y + 0.3, anchor_id, ha='center', va='bottom', fontsize=9, color='black')
+            # Place the label slightly offset inside the area for readability
+            label_offset_y = 0.25 if y <= 0.5 else 0.3
+            self.ax.text(x, y + label_offset_y, anchor_id, ha='center', va='bottom', fontsize=9, color='black')
     
     def draw_hexagon_area(self):
         """Draw the play area perimeter"""
-        # Vertices of the room (Rectangular 6.1m x 7.35m approx)
+        # Vertices of the room (Rectangular 10.6m x 6.40m)
         verts = [
-            (0.0, 0.0),      # Lower left
-            (0.0, 7.35),     # Upper left
-            (6.1, 7.35),     # Upper right
-            (6.1, 0.0),      # Lower right
-            (0.0, 0.0)       # Close loop
+            (0.0, 0.0),       # Lower left
+            (0.0, 6.40),      # Upper left
+            (10.6, 6.40),     # Upper right
+            (10.6, 0.0),      # Lower right
+            (0.0, 0.0)        # Close loop
         ]
         poly = patches.Polygon(verts, closed=True, fill=False, edgecolor='orange', linewidth=3, alpha=0.8)
         self.ax.add_patch(poly)
@@ -789,7 +791,7 @@ class UWBHexagonReplaySystem:
         if not (-1.0 <= x <= 7.0 and -1.0 <= y <= 8.5):
             return "OUTSIDE THE AREA"
         
-        # Specific zones for the indoor area (6.1m x 7.35m)
+        # Specific zones for the indoor area (10.6m x 6.40m)
         if y >= 5.5:
             return "NORTH ZONE"
         elif y <= 1.8:
