@@ -1,0 +1,27 @@
+File: c:\Users\Control Lunar\Documents\Indoor-UWB-Tracking-Platform-Firmware-Tools-\uwb_data\uwb_positions_20251127_154628.csv
+Total Samples: 1826
+
+=== Z-AXIS STATISTICS ===
+Mean Z: 0.429 m
+Std Dev Z: 0.424 m (42.4 cm)
+Min Z: 0.000 m
+Max Z: 2.426 m
+Range Z: 2.426 m
+
+=== OUTLIER CHECK ===
+Outliers (Z > 2.5m or Z < -0.5m): 0
+
+=== DISTRIBUTION ===
+count    1826.000000
+mean        0.429195
+std         0.423645
+min         0.000030
+25%         0.054145
+50%         0.221436
+75%         1.000000
+max         2.426228
+Name: z, dtype: float64
+
+=== CONCLUSION ===
+WARNING: High Z-axis variance (>30cm). Typical for UWB due to poor vertical geometry (GDOP).
+Recommendation: If 2D tracking is the goal, ignore Z or fix it to a constant height.
