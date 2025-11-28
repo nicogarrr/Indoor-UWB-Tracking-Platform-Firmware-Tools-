@@ -13,7 +13,7 @@ __pycache__/
 .Python
 venv/
 env/
-
+*.csv
 
 # ===== PLATFORMIO/ARDUINO =====
 .pio/
@@ -40,3 +40,4 @@ Thumbs.db
 outputs/
 processed_data/
 *.png 
+uwb_data/

@@ -3,104 +3,12 @@
 ## Introduction
 
 ### UWB Hardware (Makerfabs)
-This project is designed to work with **Makerfabs ESP32 UWB** boards. The following models are compatible:
+This project is designed to work with **Makerfabs ESP32 UWB** boards.
 
-#### Current Hardware Used
-* 6x **[ESP32 UWB DW3000](https://www.makerfabs.com/esp32-uwb-dw3000.html)** boards (5 anchors + 1 tag)
-  - **Price**: $43.80 USD per unit
-  - **Chip**: DecaWave DW3000 (latest generation)
-  - **Advantages**: 66% lower power consumption vs DW1000, Apple U1 compatible, FiRa™ certified
-  - **Channels**: Supports UWB channels 5 (6.5 GHz) and 9 (8 GHz)
-  - **Range**: Standard indoor range (~30m)
+#### Hardware Used
+* 6x **[ESP32 UWB DW3000](https://www.makerfabs.com/esp32-uwb-dw3000.html)** boards (6 anchors + 1 tag)
 
-#### Alternative/Upgraded Options
-* **[ESP32 UWB Pro High Power 120m](https://www.makerfabs.com/esp32-uwb-high-power-120m.html)** (Recommended for larger areas)
-  - **Price**: $51.84 USD per unit (Special offer)
-  - **Extended Range**: Up to 120 meters
-  - **Better Performance**: Higher power output for challenging environments
-  - **Same Compatibility**: Works with existing firmware
 
-* **[ESP32 UWB Pro with Display](https://www.makerfabs.com/esp32-uwb-pro-with-display.html)**
-  - **Price**: $54.80 USD per unit
-  - **Features**: Built-in OLED display for real-time monitoring
-  - **Ideal for**: Development and debugging phases
-
-#### Technical Specifications
-- **ESP32**: Dual-core Xtensa 32-bit LX6 (80-240MHz)
-- **Memory**: 8MB PSRAM (64Mbit), 4MB Flash
-- **Connectivity**: WiFi 802.11b/g/n, Bluetooth v4.2
-- **Power**: Sleep mode <5µA, board supply 4.8-5.5V
-- **Temperature**: Operating range -40°C to +85°C
-- **Dimensions**: 18.0×31.4×3.3mm
-
-### Additional Requirements
-* 2.4 GHz Wi-Fi router for MQTT transmission  
-* Computer with Python 3.8 or higher for data analysis  
-* Stable 5V power supply for anchors (USB or external)
-
-Python Environment Setup
-------------------------
-```bash
-# Clone repository (example)
-git clone https://github.com/user/TFG-UWB.git
-cd "TFG OFICIAL"
-
-# Create virtual environment (optional)
-python -m venv .venv
-# TFG-UWB: Indoor UWB Tracking Platform (Firmware & Tools)
-
-## Introduction
-
-### UWB Hardware (Makerfabs)
-This project is designed to work with **Makerfabs ESP32 UWB** boards. The following models are compatible:
-
-#### Current Hardware Used
-* 6x **[ESP32 UWB DW3000](https://www.makerfabs.com/esp32-uwb-dw3000.html)** boards (5 anchors + 1 tag)
-  - **Price**: $43.80 USD per unit
-  - **Chip**: DecaWave DW3000 (latest generation)
-  - **Advantages**: 66% lower power consumption vs DW1000, Apple U1 compatible, FiRa™ certified
-  - **Channels**: Supports UWB channels 5 (6.5 GHz) and 9 (8 GHz)
-  - **Range**: Standard indoor range (~30m)
-
-#### Alternative/Upgraded Options
-* **[ESP32 UWB Pro High Power 120m](https://www.makerfabs.com/esp32-uwb-high-power-120m.html)** (Recommended for larger areas)
-  - **Price**: $51.84 USD per unit (Special offer)
-  - **Extended Range**: Up to 120 meters
-  - **Better Performance**: Higher power output for challenging environments
-  - **Same Compatibility**: Works with existing firmware
-
-* **[ESP32 UWB Pro with Display](https://www.makerfabs.com/esp32-uwb-pro-with-display.html)**
-  - **Price**: $54.80 USD per unit
-  - **Features**: Built-in OLED display for real-time monitoring
-  - **Ideal for**: Development and debugging phases
-
-#### Technical Specifications
-- **ESP32**: Dual-core Xtensa 32-bit LX6 (80-240MHz)
-- **Memory**: 8MB PSRAM (64Mbit), 4MB Flash
-- **Connectivity**: WiFi 802.11b/g/n, Bluetooth v4.2
-- **Power**: Sleep mode <5µA, board supply 4.8-5.5V
-- **Temperature**: Operating range -40°C to +85°C
-- **Dimensions**: 18.0×31.4×3.3mm
-
-### Additional Requirements
-* 2.4 GHz Wi-Fi router for MQTT transmission  
-* Computer with Python 3.8 or higher for data analysis  
-* Stable 5V power supply for anchors (USB or external)
-
-Python Environment Setup
-------------------------
-```bash
-# Clone repository (example)
-git clone https://github.com/user/TFG-UWB.git
-cd "TFG OFICIAL"
-
-# Create virtual environment (optional)
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
 
 Firmware Programming
 --------------------
@@ -169,17 +77,19 @@ Data Format
 
 System Performance
 ------------------
-Based on experimental data (Nov 2025), the system achieves the following precision metrics:
+Based on experimental data (Nov 28, 2025), the system achieves the following precision metrics:
 
-* **Update Frequency**: ~40 Hz (Real-Time)
-* **Precision (Standard Deviation)**:
-  * **X-Axis**: ±0.09 m (9 cm)
-  * **Y-Axis**: ±0.08 m (8 cm)
-  * **Total (2D)**: ±0.10 m (10 cm)
+* **Update Frequency**: ~36 Hz (Real-Time)
+* **Static Precision (Jitter)**:
+  * **X-Axis**: ±0.10 m (10 cm)
+  * **Y-Axis**: ±0.09 m (9 cm)
+* **Dynamic Accuracy (Walking)**:
+  * **Linearity (RMSE)**: ~0.20 m (20 cm)
+  * **Mean Deviation**: ~0.13 m (13 cm)
 * **Latency**: < 25ms per position update
 
 Technical Resources
-------------------
+-------------------
 
 ### Makerfabs Documentation & Support
 * **[ESP32 UWB DW3000 Wiki](https://wiki.makerfabs.com/)** - Official documentation and tutorials

@@ -91,6 +91,12 @@ float kalman_r = 0.05;
 unsigned long last_wlsq_time = 0;
 float last_valid_position_3d[3] = {0.0, 0.0, 0.0}; 
 
+// ===== MEDIAN FILTER VARIABLES (Core 1 Local) =====
+const int MEDIAN_WINDOW_SIZE = 5;
+float median_buffer[NUM_ANCHORS][MEDIAN_WINDOW_SIZE] = {0};
+int median_idx[NUM_ANCHORS] = {0};
+bool median_init[NUM_ANCHORS] = {false};
+
 // ===== GLOBAL ANCHOR POSITIONS (anchors 1-6) =====
 const float anchorsPos[NUM_ANCHORS][3] = {
   {0.0,  0.0,  1.8},   // Anchor 1
@@ -446,6 +452,39 @@ String getDataJson() {
   return output;
 }
 
+// Median Filter Function
+float calculateMedian(float new_val, int anchor_idx) {
+    // Initialize buffer if first run
+    if (!median_init[anchor_idx]) {
+        for(int i=0; i<MEDIAN_WINDOW_SIZE; i++) median_buffer[anchor_idx][i] = new_val;
+        median_init[anchor_idx] = true;
+    }
+
+    // Add new value to circular buffer
+    median_buffer[anchor_idx][median_idx[anchor_idx]] = new_val;
+    median_idx[anchor_idx] = (median_idx[anchor_idx] + 1) % MEDIAN_WINDOW_SIZE;
+
+    // Create a temporary array for sorting
+    float sorted[MEDIAN_WINDOW_SIZE];
+    for (int i = 0; i < MEDIAN_WINDOW_SIZE; i++) {
+        sorted[i] = median_buffer[anchor_idx][i];
+    }
+
+    // Bubble Sort (Efficient for small N=5)
+    for (int i = 0; i < MEDIAN_WINDOW_SIZE - 1; i++) {
+        for (int j = 0; j < MEDIAN_WINDOW_SIZE - i - 1; j++) {
+            if (sorted[j] > sorted[j + 1]) {
+                float temp = sorted[j];
+                sorted[j] = sorted[j + 1];
+                sorted[j + 1] = temp;
+            }
+        }
+    }
+
+    // Return Median
+    return sorted[MEDIAN_WINDOW_SIZE / 2];
+}
+
 // ===== TASKS =====
 
 // CORE 1: UWB Physics Task
@@ -465,7 +504,7 @@ void TaskUWB(void *pvParameters) {
     int ranging_time = 0;
     bool waitingForResponse = false;
     unsigned long timeoutStart = 0;
-    const unsigned long RESPONSE_TIMEOUT = 15;
+    const unsigned long RESPONSE_TIMEOUT = 5;
     int rx_status;
     int fin_de_com = 0;
 
@@ -576,7 +615,11 @@ void TaskUWB(void *pvParameters) {
                                 anchor_is_active[ii] = true; anchor_fail_count[ii] = 0;
 
                                 if (distance_meters > 0) {
-                                    local_anchor_distance[ii] = kalmanFilterDistance(distance_meters, ii);
+                                    // 1. Apply Median Filter (Remove Glitches)
+                                    float median_dist = calculateMedian(distance_meters, ii);
+                                    
+                                    // 2. Apply Kalman Filter (Smooth Noise)
+                                    local_anchor_distance[ii] = kalmanFilterDistance(median_dist, ii);
                                 } else {
                                     local_anchor_distance[ii] = 0;
                                 }
@@ -585,8 +628,6 @@ void TaskUWB(void *pvParameters) {
                         }
                     }
                 } // End Anchor Loop
-
-                // Calculate Position
                 int responding_anchors = 0;
                 int responded_idx[NUM_ANCHORS];
                 for(int k=0; k<NUM_ANCHORS; k++) {

@@ -1,8 +1,10 @@
 import pandas as pd
 import numpy as np
 
+# Configuración
+file_path = "uwb_positions_20251128_132508.csv"
+
 # Load data
-file_path = 'uwb_positions_20251128_122723.csv'
 df = pd.read_csv(file_path)
 
 # Calculate differences in device_timestamp (ms)
