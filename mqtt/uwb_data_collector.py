@@ -22,9 +22,6 @@ from threading import Lock
 
 # ===== OPTIMIZED CONFIGURATIONS =====
 DEFAULT_BROKERS = [
-    ("172.20.10.2", "iPhone Hotspot"),
-    ("192.168.1.100", "WiFi Home"),
-    ("192.168.4.1", "ESP32 AP"),
     ("127.0.0.1", "Local Test")
 ]
 
@@ -46,12 +43,12 @@ class UWBDataCollector:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # *** MAIN FILES FOR ANCHORS 1-6 ***
-        self.ranging_file = os.path.join(output_dir, f"uwb_ranging_{timestamp}.csv")
+        # self.ranging_file = os.path.join(output_dir, f"uwb_ranging_{timestamp}.csv") # DISABLED
         self.positions_file = os.path.join(output_dir, f"uwb_positions_{timestamp}.csv")
         
         # Headers - all distances in meters (no conversion needed)
         self.RANGING_HEADER = "Tag_ID,Timestamp_ms,Anchor_ID,Raw_Distance_m,Filtered_Distance_m,Signal_Power_dBm,Anchor_Status"
-        self.POSITIONS_HEADER = "timestamp,tag_id,x,y,z,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist,anchor_6_dist"
+        self.POSITIONS_HEADER = "timestamp,tag_id,x,y,z,anchor_1_dist,anchor_2_dist,anchor_3_dist,anchor_4_dist,anchor_5_dist,anchor_6_dist,device_timestamp"
         
         # File handles
         self.ranging_handle = None
@@ -98,10 +95,10 @@ class UWBDataCollector:
     def init_csv_files(self):
         """Initialize CSV files with headers"""
         try:
-            # Ranging file (raw data)
-            self.ranging_handle = open(self.ranging_file, 'w', buffering=1)
-            self.ranging_handle.write(self.RANGING_HEADER + '\n')
-            print(f"Ranging file: {os.path.basename(self.ranging_file)}")
+            # Ranging file (raw data) - DISABLED
+            # self.ranging_handle = open(self.ranging_file, 'w', buffering=1)
+            # self.ranging_handle.write(self.RANGING_HEADER + '\n')
+            # print(f"Ranging file: {os.path.basename(self.ranging_file)}")
             
             # Positions file (for replay)
             self.positions_handle = open(self.positions_file, 'w', buffering=1) 
@@ -224,9 +221,9 @@ class UWBDataCollector:
                     print(f"Error processing ranging statistics: {e}")
                 
                 # Write data (NO FILTERS)
-                if self.ranging_handle:
-                    with self.file_lock:
-                        self.ranging_handle.write(payload + '\n')
+                # if self.ranging_handle:
+                #    with self.file_lock:
+                #        self.ranging_handle.write(payload + '\n')
                         
         except Exception as e:
             print(f"Error ranging data: {e}")
@@ -239,6 +236,7 @@ class UWBDataCollector:
             
             data = json.loads(payload)
             tag_id = data.get('tag_id', 0)
+            device_timestamp = data.get('timestamp_ms', 0)
             
             if 'position' in data:
                 pos = data['position']
@@ -264,7 +262,7 @@ class UWBDataCollector:
                     # Direct assignment - no conversion needed
                     distance = ad.get(key, ad.get(str(i*10), 0.0))
                     anchor_distances[key] = distance
-
+                
                 # Timestamp readable format
                 dt_timestamp = datetime.datetime.fromtimestamp(timestamp_system)
 
@@ -276,12 +274,13 @@ class UWBDataCollector:
                         x,
                         y,
                         z,
-                        anchor_distances['1'],
-                        anchor_distances['2'],
-                        anchor_distances['3'],
-                        anchor_distances['4'],
-                        anchor_distances['5'],
-                        anchor_distances['6']
+                        anchor_distances.get('1', 0),
+                        anchor_distances.get('2', 0),
+                        anchor_distances.get('3', 0),
+                        anchor_distances.get('4', 0),
+                        anchor_distances.get('5', 0),
+                        anchor_distances.get('6', 0),
+                        device_timestamp
                     ]
                     with self.file_lock:
                         self.positions_handle.write(','.join(str(v) for v in row) + '\n')
@@ -377,7 +376,7 @@ class UWBDataCollector:
             
         if self.ranging_handle:
             self.ranging_handle.close()
-            print(f"Ranging closed: {os.path.basename(self.ranging_file)}")
+            # print(f"Ranging closed: {os.path.basename(self.ranging_file)}")
             
         if self.positions_handle:
             self.positions_handle.close()

@@ -14,6 +14,7 @@ __pycache__/
 venv/
 env/
 *.csv
+
 # ===== PLATFORMIO/ARDUINO =====
 .pio/
 .vscode/
@@ -39,3 +40,4 @@ Thumbs.db
 outputs/
 processed_data/
 *.png 
+uwb_data/

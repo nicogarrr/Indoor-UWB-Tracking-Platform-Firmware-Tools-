@@ -1,0 +1,28 @@
+Deep Verification of: c:\Users\Control Lunar\Documents\Indoor-UWB-Tracking-Platform-Firmware-Tools-\uwb_data\uwb_positions_20251127_154628.csv
+
+[1] Uniqueness Check
+Total Rows: 1826
+Unique Positions (X,Y,Z): 1826 (100.0%)
+Unique Device Timestamps: 1826 (100.0%)
+SUCCESS: Timestamps are unique. Each row is a new packet.
+
+[2] Interval Analysis (Device Timestamp)
+Mean Interval: 28.69 ms
+Std Dev Interval: 39.49 ms
+Calculated Frequency: 34.85 Hz
+
+[3] Distribution of Intervals
+ts_diff
+25.0    1696
+24.0      47
+29.0      21
+26.0      18
+28.0      17
+Name: count, dtype: int64
+
+[4] Movement Check
+Frames with 0 movement: 0
+SUCCESS: Tag position is changing dynamically.
+
+[5] Conclusion
+VERDICT: Data suspicious. Check warnings above.

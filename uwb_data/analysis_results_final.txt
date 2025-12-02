@@ -1,0 +1,21 @@
+Analyzing file: C:\Users\Control Lunar\Documents\Indoor-UWB-Tracking-Platform-Firmware-Tools-\uwb_data\uwb_positions_20251127_152533.csv
+
+=== FREQUENCY ANALYSIS ===
+Total Samples: 1447
+Duration: 39.02 seconds
+Average Frequency: 168.80 Hz
+Median Frequency:  19.61 Hz
+Min Frequency:     1.99 Hz
+Max Frequency:     1000.00 Hz
+Std Dev Frequency: 328.39 Hz
+Jitter (Interval Std Dev): 64.68 ms
+Average Interval:          68.23 ms
+
+=== POSITION PRECISION (STABILITY) ===
+Mean Position: X=2.121m, Y=3.431m, Z=0.448m
+Std Dev (Precision):
+  X: 0.0833 m (8.33 cm)
+  Y: 0.1171 m (11.71 cm)
+  Z: 0.4266 m (42.66 cm)
+Mean 2D Error (from centroid): 12.11 cm
+Max 2D Error (from centroid):  49.00 cm
