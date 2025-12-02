@@ -8,7 +8,7 @@
 #include <cmath>  // For fabs, sqrt, etc.
 #include <ArduinoJson.h>
 #include "esp_wifi.h"
-#include "esp_bt.h"
+// #include "esp_eap_client.h" // Not needed for Arduino ESP32 v3.0.0+
 
 // FreeRTOS Includes
 #include <freertos/FreeRTOS.h>
@@ -23,8 +23,19 @@
 #define USE_AP_MODE false
 #define AP_SSID "UWB_TAG_AP"
 #define AP_PASS "12345678"
-#define STA_SSID "iPhone de Nico"
-#define STA_PASS "12345678"
+
+// Enterprise Configuration
+#define USE_ENTERPRISE true
+
+#if USE_ENTERPRISE
+  #define STA_SSID "Uniovi WiFi" // University WiFi
+  #define EAP_IDENTITY "uo288336"
+  #define EAP_USERNAME "uo288336"
+  #define EAP_PASSWORD "@Nicogarrr"
+#else
+  #define STA_SSID "iPhone de Nico"
+  #define STA_PASS "12345678"
+#endif
 
 // Server configuration 
 #define HTTP_PORT 80
@@ -426,18 +437,18 @@ void kalmanFilterPosition3D(float measured_x, float measured_y, float measured_z
 
 // Generate data in JSON format (Thread-Safe Reading)
 String getDataJson() {
-  StaticJsonDocument<1024> doc;
+  JsonDocument doc;
   
   // Lock Mutex to read globals safely
   if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-      JsonArray anchorsArray = doc.createNestedArray("anchors");
+      JsonArray anchorsArray = doc["anchors"].to<JsonArray>();
       for (int i = 0; i < NUM_ANCHORS; i++) {
-        JsonObject anchorObject = anchorsArray.createNestedObject();
+        JsonObject anchorObject = anchorsArray.add<JsonObject>();
         anchorObject["id"] = ID_PONG[i];
         anchorObject["dist"] = isnan(global_anchor_distance[i]) || isinf(global_anchor_distance[i]) ? 0.0 : (global_anchor_distance[i] * 100);
         anchorObject["rssi"] = isnan(global_pot_sig[i]) || isinf(global_pot_sig[i]) ? -100.0 : global_pot_sig[i];
       }
-      JsonObject positionObject = doc.createNestedObject("position");
+      JsonObject positionObject = doc["position"].to<JsonObject>();
       positionObject["x"] = isnan(global_tagPositionX) || isinf(global_tagPositionX) ? 0.0 : global_tagPositionX;
       positionObject["y"] = isnan(global_tagPositionY) || isinf(global_tagPositionY) ? 0.0 : global_tagPositionY;
       positionObject["z"] = isnan(global_tagPositionZ) || isinf(global_tagPositionZ) ? 0.0 : global_tagPositionZ;
@@ -690,7 +701,17 @@ void TaskComms(void *pvParameters) {
     } else {
         WiFi.mode(WIFI_STA);
         esp_wifi_set_ps(WIFI_PS_NONE);
-        WiFi.begin(STA_SSID, STA_PASS);
+        
+        #if USE_ENTERPRISE
+            // esp_eap_client_set_identity((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
+            // esp_eap_client_set_username((uint8_t *)EAP_USERNAME, strlen(EAP_USERNAME));
+            // esp_eap_client_set_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD));
+            // esp_eap_client_enable();
+            WiFi.begin(STA_SSID, WPA2_AUTH_PEAP, EAP_IDENTITY, EAP_USERNAME, EAP_PASSWORD);
+        #else
+            WiFi.begin(STA_SSID, STA_PASS);
+        #endif
+
         while (WiFi.status() != WL_CONNECTED) {
             vTaskDelay(pdMS_TO_TICKS(500));
             Serial.print(".");
@@ -731,14 +752,14 @@ void TaskComms(void *pvParameters) {
 
             // MQTT Publish
             if (client.connected()) {
-                StaticJsonDocument<512> doc;
+                JsonDocument doc;
                 doc["tag_id"] = TAG_ID;
                 doc["timestamp_ms"] = packet.timestamp;
                 
-                JsonObject position = doc.createNestedObject("position");
+                JsonObject position = doc["position"].to<JsonObject>();
                 position["x"] = packet.x; position["y"] = packet.y; position["z"] = packet.z;
 
-                JsonObject anchorDistances = doc.createNestedObject("anchor_distances");
+                JsonObject anchorDistances = doc["anchor_distances"].to<JsonObject>();
                 for (int i = 0; i < NUM_ANCHORS; i++) {
                     if (packet.anchor_resp[i]) {
                         anchorDistances[String(ID_PONG[i])] = packet.anchor_dist[i];
